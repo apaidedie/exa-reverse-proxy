@@ -4,6 +4,16 @@ dist/
 .env.*
 !.env.example
 exa_api_key.txt
+exa_api_key*.txt
+*.deprecated
+*.old
+*.backup
+config/secrets.json
+config/secrets.yml
+config/secrets/
+local-archive/
+*.pem
+*.key
 tmp/
 output/
 test-results/

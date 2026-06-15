@@ -1,10 +1,6 @@
 services:
   exa-proxy:
-    build:
-      context: .
-      args:
-        NODE_IMAGE: ${NODE_IMAGE:-node:22-bookworm-slim}
-    image: exa-reverse-proxy:local
+    image: al1ya/exa-reverse-proxy:latest
     restart: unless-stopped
     ports:
       - "127.0.0.1:8787:8787"
@@ -15,7 +11,8 @@ services:
       PORT: 8787
       EXA_STATE_PATH: /data/exa-proxy.sqlite
       EXA_KEYS_FILE: /run/secrets/exa_api_key.txt
-      EXA_ADMIN_HEALTHCHECK_TOKEN: ${EXA_ADMIN_HEALTHCHECK_TOKEN:-replace_with_admin_token}
+      EXA_ADMIN_REQUIRE_HTTPS: "true"
+      EXA_ADMIN_ALLOW_RAW_KEY_DISPLAY: "false"
     volumes:
       - exa_proxy_data:/data
       - ./exa_api_key.txt:/run/secrets/exa_api_key.txt:ro

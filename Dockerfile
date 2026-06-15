@@ -6,19 +6,21 @@ RUN apt-get update   && apt-get install -y --no-install-recommends python3 make 
 
 FROM deps AS build
 COPY tsconfig.json vitest.config.ts ./
+COPY Dockerfile docker-compose.yml docker-compose.deploy.yml .dockerignore .gitignore ./
 COPY src ./src
 COPY scripts ./scripts
 COPY test ./test
+COPY .github ./.github
 COPY README.md ./README.md
 COPY docs ./docs
-RUN npm test
-RUN npm run build
+RUN set -e && npm test && npm run build
 RUN npm prune --omit=dev
 
 FROM ${NODE_IMAGE} AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 RUN useradd --system --uid 10001 --create-home appuser && mkdir -p /data && chown appuser:appuser /data
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
 COPY --from=build /app/package*.json ./
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist

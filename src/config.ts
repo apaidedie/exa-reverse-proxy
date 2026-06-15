@@ -40,19 +40,41 @@ function normalizeFileKey(line: string): string | null {
   return value || null;
 }
 
+function parseFileKeyEntry(line: string, env: Env): { id: string | null; value: string; weight: number } | null {
+  const normalized = normalizeFileKey(line);
+  if (!normalized) return null;
+
+  const parts = normalized.split(':');
+  if (parts.length === 1) return { id: null, value: resolveSecret(normalized, env), weight: 1 };
+  if (parts.length !== 3) throw new Error(`Invalid EXA_KEYS_FILE entry: ${normalized}`);
+
+  const [id, valueRaw, weightRaw] = parts;
+  const value = resolveSecret(valueRaw, env);
+  const weight = Number(weightRaw);
+  if (!id || !value || !Number.isInteger(weight) || weight < 1) {
+    throw new Error(`Invalid EXA_KEYS_FILE entry: ${normalized}`);
+  }
+  return { id, value, weight };
+}
+
 function parseKeysFile(path: string | undefined, env: Env, offset: number, usedValues: Set<string>, usedIds: Set<string>): ProxyConfig['keys'] {
   if (!path) return [];
   const filePath = resolveSecret(path, env);
-  const values: string[] = [];
-  for (const line of readFileSync(filePath, 'utf8').split(/\r?\n/)) {
-    const value = normalizeFileKey(line);
-    if (!value || usedValues.has(value)) continue;
-    usedValues.add(value);
-    values.push(value);
-  }
-
+  const keys: ProxyConfig['keys'] = [];
   let cursor = offset + 1;
-  return values.map((value) => {
+
+  for (const line of readFileSync(filePath, 'utf8').split(/\r?\n/)) {
+    const entry = parseFileKeyEntry(line, env);
+    if (!entry || usedValues.has(entry.value)) continue;
+    usedValues.add(entry.value);
+
+    if (entry.id) {
+      if (usedIds.has(entry.id)) throw new Error(`Duplicate EXA key id in EXA_KEYS_FILE: ${entry.id}`);
+      usedIds.add(entry.id);
+      keys.push({ id: entry.id, value: entry.value, weight: entry.weight, enabled: true });
+      continue;
+    }
+
     let id = `exa_${String(cursor).padStart(4, '0')}`;
     while (usedIds.has(id)) {
       cursor += 1;
@@ -60,8 +82,10 @@ function parseKeysFile(path: string | undefined, env: Env, offset: number, usedV
     }
     usedIds.add(id);
     cursor += 1;
-    return { id, value, weight: 1, enabled: true };
-  });
+    keys.push({ id, value: entry.value, weight: 1, enabled: true });
+  }
+
+  return keys;
 }
 
 function parseKeys(raw: string | undefined, env: Env): ProxyConfig['keys'] {
@@ -102,16 +126,36 @@ function readNumberList(env: Env, name: string, fallback: number[]): number[] {
 export function loadConfigFromEnv(env: Env = process.env): ProxyConfig {
   const proxyTokens = splitCsv(env.EXA_PROXY_TOKENS);
   if (proxyTokens.length === 0) throw new Error('EXA_PROXY_TOKENS is required');
+  if (proxyTokens.some(t => t.length < 16)) {
+    throw new Error('All proxy tokens must be at least 16 characters for security');
+  }
+
+  const adminTokens = splitCsv(env.EXA_ADMIN_TOKENS);
+  if (adminTokens.some(t => t.length < 16)) {
+    throw new Error('All admin tokens must be at least 16 characters for security');
+  }
+
+  const keys = parseConfiguredKeys(env);
+  if (keys.length === 0) {
+    throw new Error('At least one EXA API key is required (via EXA_KEYS or EXA_KEYS_FILE)');
+  }
+
+  const upstreamUrl = env.EXA_UPSTREAM_URL ?? 'https://api.exa.ai';
+  try {
+    new URL(upstreamUrl);
+  } catch {
+    throw new Error(`Invalid EXA_UPSTREAM_URL: ${upstreamUrl}`);
+  }
 
   const allowedPaths = splitCsv(env.EXA_ALLOWED_PATHS);
 
   return {
     host: env.HOST ?? '0.0.0.0',
     port: readNumber(env, 'PORT', 8787),
-    upstreamUrl: env.EXA_UPSTREAM_URL ?? 'https://api.exa.ai',
-    keys: parseConfiguredKeys(env),
+    upstreamUrl,
+    keys,
     proxyTokens,
-    adminTokens: splitCsv(env.EXA_ADMIN_TOKENS),
+    adminTokens,
     statePath: env.EXA_STATE_PATH ?? './exa-proxy.sqlite',
     selectionStrategy: parseStrategy(env.EXA_SELECTION_STRATEGY),
     maxAttempts: readNumber(env, 'EXA_MAX_ATTEMPTS', 3),

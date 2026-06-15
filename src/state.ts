@@ -294,7 +294,12 @@ export function createStateStore(path: string, keys: KeyConfig[]): StateStore {
     );
     CREATE INDEX IF NOT EXISTS request_logs_created_at_idx ON request_logs(created_at);
     CREATE INDEX IF NOT EXISTS request_logs_request_id_idx ON request_logs(request_id);
+    CREATE INDEX IF NOT EXISTS request_logs_status_idx ON request_logs(status);
+    CREATE INDEX IF NOT EXISTS request_logs_path_idx ON request_logs(path);
+    CREATE INDEX IF NOT EXISTS request_logs_error_code_idx ON request_logs(error_code);
     CREATE INDEX IF NOT EXISTS admin_audit_logs_created_at_idx ON admin_audit_logs(created_at);
+    CREATE INDEX IF NOT EXISTS admin_audit_logs_action_idx ON admin_audit_logs(action);
+    CREATE INDEX IF NOT EXISTS admin_audit_logs_actor_idx ON admin_audit_logs(actor_token_id);
     CREATE INDEX IF NOT EXISTS admin_sessions_expires_at_idx ON admin_sessions(expires_at);
   `);
 

@@ -13,6 +13,21 @@ Docker-deployable reverse proxy for Exa that balances requests across multiple u
 
 ## Quick Start
 
+### Use The Docker Hub Image
+
+For GitHub sharing or VPS deployment, use the prebuilt image:
+
+```bash
+cp .env.example .env
+printf '%s\n' 'your_real_exa_key' > exa_api_key.txt
+# Edit .env and set EXA_PROXY_TOKENS, EXA_ADMIN_TOKENS, and EXA_ADMIN_HEALTHCHECK_TOKEN.
+docker compose -f docker-compose.deploy.yml up -d
+```
+
+The deployment compose file pulls `al1ya/exa-reverse-proxy:latest`, persists SQLite data in a Docker volume, reads Exa keys from `exa_api_key.txt`, and binds the service to `127.0.0.1:8787` for safer reverse-proxy deployments. Pin `image: al1ya/exa-reverse-proxy:0.1.1` in `docker-compose.deploy.yml` if you want a fixed release instead of `latest`.
+
+### Build Locally
+
 1. Copy `.env.example` to `.env`.
 2. Put real Exa keys in `exa_api_key.txt` or replace `EXA_KEYS` entries, then set proxy/admin tokens.
 3. Start the service:
@@ -54,7 +69,14 @@ EXA_ADMIN_TOKENS=admin_local_token
 EXA_ADMIN_HEALTHCHECK_TOKEN=admin_local_token
 ```
 
-For large pools, use `EXA_KEYS_FILE` instead of a huge environment variable. The file is one Exa key per line; lines like `EXA_API_KEY=...`, blank lines, duplicate keys, and `#` comments are handled safely. Docker Compose mounts local `exa_api_key.txt` read-only at `/run/secrets/exa_api_key.txt`.
+For large pools, use `EXA_KEYS_FILE` instead of a huge environment variable. The file can be one raw Exa key per line, or `id:key:weight` when you want stable key IDs across reorders. Lines like `EXA_API_KEY=...`, blank lines, duplicate keys, and `#` comments are handled safely. Docker Compose mounts local `exa_api_key.txt` read-only at `/run/secrets/exa_api_key.txt`.
+
+```text
+# exa_api_key.txt
+stable_prod_a:replace_with_exa_key_a:2
+stable_prod_b:replace_with_exa_key_b:1
+replace_with_exa_key_without_custom_id
+```
 
 ```dotenv
 EXA_KEYS_FILE=/run/secrets/exa_api_key.txt
@@ -102,7 +124,7 @@ Admin endpoints require one value from `EXA_ADMIN_TOKENS`. `GET /` is the recomm
 
 ## Security And Operations
 
-For production deployments, set `EXA_ADMIN_REQUIRE_HTTPS=true` when the service is behind an HTTPS reverse proxy that forwards `x-forwarded-proto: https`, and use `docker-compose.vps.yml` so port 8787 binds only to localhost. The default Compose file also binds port 8787 to localhost for safer local testing. Admin sessions expire after `EXA_ADMIN_SESSION_TTL_SECONDS`; repeated failed logins are locked using `EXA_ADMIN_LOCKOUT_MAX_FAILURES`, `EXA_ADMIN_LOCKOUT_WINDOW_SECONDS`, and `EXA_ADMIN_LOCKOUT_SECONDS`.
+For production deployments, set `EXA_ADMIN_REQUIRE_HTTPS=true` when the service is behind an HTTPS reverse proxy that forwards `x-forwarded-proto: https`. Use `docker-compose.deploy.yml` for the prebuilt Docker Hub image, or combine `docker-compose.yml` with `config/docker-compose.vps.yml` when building locally. Both compose paths bind port 8787 to localhost by default. Admin sessions expire after `EXA_ADMIN_SESSION_TTL_SECONDS`; repeated failed logins are locked using `EXA_ADMIN_LOCKOUT_MAX_FAILURES`, `EXA_ADMIN_LOCKOUT_WINDOW_SECONDS`, and `EXA_ADMIN_LOCKOUT_SECONDS`.
 
 The console includes trend buckets, alert summaries, audit records, real runtime configuration, requestId trace, per-key recent failure reasons, log filtering/export, retention pruning and retention status, batch key actions, webhook status/testing, and a masked display toggle. Raw key reveal is policy-gated and audited. Request logs remain sanitized and store internal key IDs rather than raw Exa key values. The service prunes expired request logs on startup and then continues enforcing `EXA_LOG_RETENTION_DAYS` while it is running.
 
@@ -111,6 +133,13 @@ The admin UI serves HTML with `no-store`, injects hashed `?v=` asset URLs, retur
 ### SQLite Operations
 
 The state database is a normal SQLite file with WAL enabled. For backup, stop the container or use SQLite's online backup tooling against `EXA_STATE_PATH`; copy the main database together with `-wal` and `-shm` files when the service is still running. For restore, stop the service, replace the database files as a set, then start the service and check `/_proxy/health`, `/_proxy/keys`, and `/_proxy/metrics`.
+
+For Docker deployments, use the packaged backup helpers. `backup:docker` stops the compose service, archives `/data/exa-proxy.sqlite*`, and starts the service again. `restore:docker` requires `--yes` because it replaces the state files in the Docker volume.
+
+```bash
+npm run backup:docker
+npm run restore:docker -- backups/exa-proxy-state-2026-06-14T00-00-00-000Z.tar.gz --yes
+```
 
 For long-running deployments, keep `EXA_LOG_RETENTION_DAYS` enabled, monitor WAL size next to the database file, and schedule periodic maintenance during a quiet window:
 
@@ -122,14 +151,16 @@ sqlite3 /data/exa-proxy.sqlite "PRAGMA index_list('request_logs'); PRAGMA index_
 ## Development
 
 ```bash
-npm install
-npm test
+npm ci
+npm run verify
+npm run scan:secrets
 npm run test:e2e
-npm run build
 npm run dev
 ```
 
-For local development without Docker, provide environment variables matching `.env.example`; the default listen address is `0.0.0.0:8787`. VPS deployment notes are in `docs/vps-deployment.md`.
+CI runs on Node.js 22.x, matching the Docker image. Local Node.js 22 or newer is supported; if `better-sqlite3` was compiled under a different Node version, run `npm rebuild better-sqlite3`.
+
+For local development without Docker, provide environment variables matching `.env.example`; the default listen address is `0.0.0.0:8787`. Deployment notes are in `docs/DEPLOYMENT.md`.
 
 ## Notes
 

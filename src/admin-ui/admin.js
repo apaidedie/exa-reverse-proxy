@@ -139,13 +139,6 @@ async function keyAction(id, action) {
   await refresh();
 }
 
-async function testWebhook() {
-  const result = await api('/_proxy/alerts/webhook/test', { method: 'POST' });
-  const ok = Boolean(result.ok);
-  showToast(ok ? 'Webhook 测试已发送：HTTP ' + (result.statusCode || '-') : 'Webhook 测试失败：' + (result.error || '未知错误'));
-  await refresh();
-}
-
 function connectEventStream() {
   if (!window.EventSource || state.events || !currentSessionId()) return;
   const source = new EventSource('/_proxy/events?sessionId=' + encodeURIComponent(currentSessionId()));

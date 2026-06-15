@@ -140,37 +140,62 @@ export async function proxyHandler(request: FastifyRequest, reply: FastifyReply,
     return reply.code(503).send(proxyError('affinity_key_unavailable', 'The key that owns this resource is not currently available.', requestId));
   }
 
-  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    const now = Date.now();
-    const key = attempt === 0 && affinityChoice.key ? affinityChoice.key : deps.scheduler.next(now, attempted);
-    if (!key) break;
-    attempted.add(key.id);
-    keyIds.push(key.id);
-    const attemptStart = Date.now();
+  try {
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      const now = Date.now();
+      const key = attempt === 0 && affinityChoice.key ? affinityChoice.key : deps.scheduler.next(now, attempted);
+      if (!key) break;
+      attempted.add(key.id);
+      keyIds.push(key.id);
+      const attemptStart = Date.now();
 
-    try {
-      const upstream = await callUpstream({
-        baseUrl: deps.config.upstreamUrl,
-        pathAndQuery: pathAndQuery(request),
-        method: request.method,
-        headers: buildUpstreamHeaders(request.headers, { upstreamKey: key.value, requestId }),
-        body,
-        timeoutMs: deps.config.attemptTimeoutMs
-      });
+      try {
+        const upstream = await callUpstream({
+          baseUrl: deps.config.upstreamUrl,
+          pathAndQuery: pathAndQuery(request),
+          method: request.method,
+          headers: buildUpstreamHeaders(request.headers, { upstreamKey: key.value, requestId }),
+          body,
+          timeoutMs: deps.config.attemptTimeoutMs
+        });
 
-      const latencyMs = Date.now() - attemptStart;
-      const decision = classifyStatus(upstream.statusCode);
-      finalStatus = upstream.statusCode;
-      lastResponse = upstream;
-      lastErrorReason = decision.reason;
-      recordAttempt(deps, { keyId: key.id, status: upstream.statusCode, success: statusCountsAsSuccess(upstream.statusCode), latencyMs, retry: attempt > 0, reason: decision.reason });
+        const latencyMs = Date.now() - attemptStart;
+        const decision = classifyStatus(upstream.statusCode);
+        finalStatus = upstream.statusCode;
+        lastResponse = upstream;
+        lastErrorReason = decision.reason;
+        recordAttempt(deps, { keyId: key.id, status: upstream.statusCode, success: statusCountsAsSuccess(upstream.statusCode), latencyMs, retry: attempt > 0, reason: decision.reason });
 
-      if (decision.reason === 'rate_limit') {
-        const retryAfterMs = parseRetryAfterMs(Array.isArray(upstream.headers['retry-after']) ? upstream.headers['retry-after'][0] : upstream.headers['retry-after']);
-        const until = Date.now() + (retryAfterMs ?? deps.config.rateLimitCooldownSeconds * 1000);
-        deps.scheduler.coolDown(key.id, until, Date.now(), 'rate_limit');
-        deps.state.setCooldown(key.id, until, 'rate_limit');
-      } else if (decision.retryable) {
+        if (decision.reason === 'rate_limit') {
+          const retryAfterMs = parseRetryAfterMs(Array.isArray(upstream.headers['retry-after']) ? upstream.headers['retry-after'][0] : upstream.headers['retry-after']);
+          const until = Date.now() + (retryAfterMs ?? deps.config.rateLimitCooldownSeconds * 1000);
+          deps.scheduler.coolDown(key.id, until, Date.now(), 'rate_limit');
+          deps.state.setCooldown(key.id, until, 'rate_limit');
+        } else if (decision.retryable) {
+          const until = deps.scheduler.recordFailure(
+            key.id,
+            Date.now(),
+            deps.config.failureThreshold,
+            deps.config.failureWindowSeconds * 1000,
+            deps.config.cooldownSeconds * 1000,
+            decision.reason
+          );
+          if (until) deps.state.setCooldown(key.id, until, decision.reason);
+        } else {
+          deps.scheduler.recordSuccess(key.id);
+        }
+
+        if (!decision.retryable || attempt === maxAttempts - 1) {
+          break;
+        }
+
+        await bufferBody(upstream);
+        await sleep(retryBackoffMs(deps.config.retryBackoffMs, attempt));
+      } catch (error) {
+        const latencyMs = Date.now() - attemptStart;
+        const decision = classifyError(error);
+        lastErrorReason = decision.reason;
+        recordAttempt(deps, { keyId: key.id, status: null, success: false, latencyMs, retry: attempt > 0, reason: decision.reason });
         const until = deps.scheduler.recordFailure(
           key.id,
           Date.now(),
@@ -180,32 +205,19 @@ export async function proxyHandler(request: FastifyRequest, reply: FastifyReply,
           decision.reason
         );
         if (until) deps.state.setCooldown(key.id, until, decision.reason);
-      } else {
-        deps.scheduler.recordSuccess(key.id);
+        if (!decision.retryable || attempt === maxAttempts - 1) break;
+        await sleep(retryBackoffMs(deps.config.retryBackoffMs, attempt));
       }
-
-      if (!decision.retryable || attempt === maxAttempts - 1) {
-        break;
+    }
+  } finally {
+    // Ensure response body is consumed to avoid connection leaks
+    // Only clean up if we're NOT going to send this response
+    if (lastResponse && !reply.sent && keyIds.length === 0) {
+      try {
+        await bufferBody(lastResponse);
+      } catch {
+        // Silent failure - best effort cleanup
       }
-
-      await bufferBody(upstream);
-      await sleep(retryBackoffMs(deps.config.retryBackoffMs, attempt));
-    } catch (error) {
-      const latencyMs = Date.now() - attemptStart;
-      const decision = classifyError(error);
-      lastErrorReason = decision.reason;
-      recordAttempt(deps, { keyId: key.id, status: null, success: false, latencyMs, retry: attempt > 0, reason: decision.reason });
-      const until = deps.scheduler.recordFailure(
-        key.id,
-        Date.now(),
-        deps.config.failureThreshold,
-        deps.config.failureWindowSeconds * 1000,
-        deps.config.cooldownSeconds * 1000,
-        decision.reason
-      );
-      if (until) deps.state.setCooldown(key.id, until, decision.reason);
-      if (!decision.retryable || attempt === maxAttempts - 1) break;
-      await sleep(retryBackoffMs(deps.config.retryBackoffMs, attempt));
     }
   }
 

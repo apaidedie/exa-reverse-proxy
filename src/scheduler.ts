@@ -26,6 +26,8 @@ export class KeyScheduler {
   private readonly adaptive = new Map<string, AdaptiveRuntime>();
   private readonly sequence: string[];
   private pointer = 0;
+  private adaptiveSeqCache: { seq: string[]; timestamp: number } | null = null;
+  private readonly CACHE_TTL = 1000; // 1 second cache for adaptive sequence
 
   constructor(keys: SchedulerKey[], private readonly strategy: ProxyConfig['selectionStrategy']) {
     for (const key of keys) {
@@ -50,9 +52,21 @@ export class KeyScheduler {
   }
 
   private adaptiveSequence(now: number, exclude: Set<string>): string[] {
-    return [...this.states.values()]
+    // Use cache if available, recent, and no exclusions
+    if (this.adaptiveSeqCache && (now - this.adaptiveSeqCache.timestamp) < this.CACHE_TTL && exclude.size === 0) {
+      return this.adaptiveSeqCache.seq;
+    }
+
+    const seq = [...this.states.values()]
       .filter((state) => this.isEligible(state, now, exclude))
       .flatMap((state) => Array.from({ length: this.adaptiveRuntimeFor(state).weight }, () => state.key.id));
+
+    // Cache only when no exclusions
+    if (exclude.size === 0) {
+      this.adaptiveSeqCache = { seq, timestamp: now };
+    }
+
+    return seq;
   }
 
   next(now: number, exclude: Set<string> = new Set()): SchedulerKey | undefined {
@@ -81,6 +95,8 @@ export class KeyScheduler {
   }
 
   updateAdaptiveStats(stats: KeyStats[]): void {
+    // Invalidate the adaptive sequence cache since stats changed
+    this.adaptiveSeqCache = null;
     for (const stat of stats) {
       const state = this.states.get(stat.id);
       if (!state) continue;
@@ -138,7 +154,10 @@ export class KeyScheduler {
   recordFailure(id: string, now: number, threshold: number, windowMs: number, cooldownMs: number, reason: string): number | undefined {
     const state = this.states.get(id);
     if (!state) return undefined;
-    state.failureTimestamps = [...state.failureTimestamps, now].filter((timestamp) => now - timestamp <= windowMs);
+    // Filter old timestamps and limit array size to prevent memory leaks
+    state.failureTimestamps = [...state.failureTimestamps, now]
+      .filter((timestamp) => now - timestamp <= windowMs)
+      .slice(-Math.max(threshold * 2, 100)); // Keep at most threshold*2 or 100 entries
     if (threshold > 0 && state.failureTimestamps.length >= threshold) {
       const until = now + cooldownMs;
       this.coolDown(id, until, now, reason);

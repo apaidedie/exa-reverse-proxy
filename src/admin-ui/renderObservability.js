@@ -12,27 +12,6 @@ export function renderRetention(data) {
   el('retentionWindow').textContent = retention.cutoffMs ? '清理早于 ' + stamp(retention.cutoffMs) + ' 的请求日志。' : '自动清理未启用。';
 }
 
-export function renderWebhookStatus(data) {
-  const webhook = data.webhook || { enabled: false, lastStatus: 'disabled' };
-  const labelMap = { disabled: '未启用', idle: '待命', sent: '已投递', cooldown: '冷却中', failed: '失败' };
-  const status = webhook.lastStatus || (webhook.enabled ? 'idle' : 'disabled');
-  el('webhookStatus').textContent = labelMap[status] || status;
-  el('webhookStatus').className = status === 'sent' || status === 'idle' ? 'good' : status === 'failed' ? 'bad' : 'warn';
-  if (!webhook.enabled) {
-    el('webhookSummary').textContent = '未配置投递地址。';
-  } else if (status === 'cooldown') {
-    el('webhookSummary').textContent = '同一组告警已投递，冷却至 ' + stamp(webhook.cooldownUntil) + '。';
-  } else if (status === 'failed') {
-    const statusCode = webhook.lastStatusCode ? '，HTTP ' + webhook.lastStatusCode : '';
-    el('webhookSummary').textContent = '最近投递失败：' + (webhook.lastError || '未知错误') + statusCode;
-  } else {
-    const statusCode = webhook.lastStatusCode ? '，最近 HTTP ' + webhook.lastStatusCode : '';
-    const attempts = webhook.lastAttempts ? '，尝试 ' + webhook.lastAttempts + ' 次' : '';
-    const signed = webhook.signed ? '，已签名' : '';
-    el('webhookSummary').textContent = (webhook.target ? '目标 ' + webhook.target : '已配置投递地址。') + statusCode + attempts + signed;
-  }
-}
-
 export function renderConfigSummary() {
   const config = state.config || {};
   const strategyMap = { round_robin: '轮询', weighted_round_robin: '加权轮询', least_recently_used: '最少最近使用', adaptive_weighted: '自适应加权' };
@@ -68,6 +47,5 @@ export function renderObservability() {
   el('alertCount').textContent = fmt(alerts.length) + ' 条告警';
   el('alertList').innerHTML = alerts.length ? alerts.map((alert) => '<div class="alert-item ' + esc(alert.severity || 'warn') + '"><div class="alert-title"><span>' + esc(alert.title) + '</span><span class="badge ' + esc(alert.severity || 'warn') + '">' + (alert.severity === 'bad' ? '严重' : '关注') + '</span></div><div class="alert-message">' + esc(alert.message) + '</div></div>').join('') : '<div class="empty">暂无告警。</div>';
   renderRetention(data);
-  renderWebhookStatus(data);
   renderConfigSummary();
 }

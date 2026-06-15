@@ -1,19 +1,24 @@
 {
   "name": "exa-reverse-proxy",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json && node scripts/copy-admin-ui.mjs",
     "demo:ui": "tsx scripts/demo-ui-server.ts",
-    "start": "node dist/src/index.js",
+    "start": "node --env-file=.env dist/src/index.js",
     "test": "vitest run",
     "test:e2e": "playwright test",
     "test:watch": "vitest",
-    "lint": "tsc -p tsconfig.json --noEmit"
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "scan:secrets": "node scripts/scan-secrets.mjs",
+    "backup:docker": "node scripts/backup-state.mjs",
+    "restore:docker": "node scripts/restore-state.mjs",
+    "verify": "npm run scan:secrets && npm run lint && npm test && npm audit --audit-level=high && npm run build"
   },
   "dependencies": {
+    "@fastify/rate-limit": "^10.2.0",
     "@fastify/sensible": "^6.0.3",
     "better-sqlite3": "^11.10.0",
     "fastify": "^5.3.3",
@@ -25,7 +30,7 @@
     "@types/node": "^22.15.29",
     "tsx": "^4.19.4",
     "typescript": "^5.8.3",
-    "vitest": "^3.2.1"
+    "vitest": "^4.1.8"
   },
   "engines": {
     "node": ">=22"

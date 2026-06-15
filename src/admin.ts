@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
+import rateLimit from '@fastify/rate-limit';
 import { requestIdFrom } from './errors.js';
 import { renderPrometheusKeyMetrics } from './metrics.js';
 import type { AppDeps } from './app.js';
@@ -53,6 +54,20 @@ function buildAuditCsv(logs: ReturnType<AppDeps['state']['listAdminAuditLogs']>)
 export async function registerAdminRoutes(app: FastifyInstance, deps: AppDeps): Promise<void> {
   const auth = createAdminAuth(deps);
   const alertWebhookState = createAlertWebhookState();
+
+  // Register rate limiting for admin endpoints
+  await app.register(rateLimit, {
+    max: 100,
+    timeWindow: '1 minute',
+    skipOnError: false,
+    keyGenerator: (request) => {
+      // Use IP + user agent for rate limiting
+      const forwarded = request.headers['x-forwarded-for'];
+      const ip = (Array.isArray(forwarded) ? forwarded[0] : forwarded)?.split(',')[0] || request.ip || 'unknown';
+      const ua = request.headers['user-agent'] || 'unknown';
+      return `${ip}|${ua}`;
+    }
+  });
 
   await registerAdminStaticRoutes(app);
 

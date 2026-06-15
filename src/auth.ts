@@ -1,4 +1,4 @@
-import { createHash, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 
 type HeaderBag = Record<string, string | string[] | undefined>;
 
@@ -31,7 +31,9 @@ export function isAuthorized(headers: HeaderBag, allowedTokens: string[]): boole
 }
 
 export function tokenId(token: string): string {
-  return `tok_${createHash('sha256').update(token).digest('hex').slice(0, 12)}`;
+  // Use HMAC with salt for better security against brute force attacks
+  const salt = 'exa-proxy-v1';
+  return `tok_${createHmac('sha256', salt).update(token).digest('hex').slice(0, 12)}`;
 }
 
 export function presentedTokenId(headers: HeaderBag, allowedTokens: string[]): string | undefined {
