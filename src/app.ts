@@ -129,7 +129,7 @@ export async function buildApp(options: { config: ProxyConfig }): Promise<Fastif
   }));
 
   if (configKeys.length === 0) {
-    throw new Error('No Exa API keys configured. Add keys via admin API or set EXA_KEYS/EXA_KEYS_FILE environment variables.');
+    app.log.warn('No Exa API keys configured. Proxy requests will return 503 until keys are added via admin API (POST /_proxy/keys).');
   }
 
   // Update config.keys to reflect DB state (runtime snapshot)

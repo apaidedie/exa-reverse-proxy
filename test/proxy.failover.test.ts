@@ -130,7 +130,11 @@ describe('proxy failover', () => {
     expect(logs.json().logs[0]).toMatchObject({ path: '/search', status: 400, attempts: 1, keyIds: ['a'], errorCode: 'client_status' });
   });
 
-  it('throws at startup when no keys are configured', async () => {
-    await expect(buildApp({ config: testConfig({ keys: [] }) })).rejects.toThrow();
+  it('starts with zero keys and returns 503 for proxy requests', async () => {
+    const app = await buildApp({ config: testConfig({ keys: [] }) });
+    const res = await app.inject({ method: 'POST', path: '/search', headers: { authorization: 'Bearer client_token' } });
+    expect(res.statusCode).toBe(503);
+    expect(res.json()).toMatchObject({ error: { code: 'no_healthy_keys' } });
+    await app.close();
   });
 });
