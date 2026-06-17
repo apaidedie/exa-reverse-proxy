@@ -2,7 +2,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import { buildUpstreamHeaders, sanitizeResponseHeaders } from './headers.js';
 import { isAuthorized, presentedTokenId } from './auth.js';
 import { proxyError, requestIdFrom } from './errors.js';
-import { isAllowedPath, isRetrySafe, parseResourceAffinity, createdResourceFromResponse } from './routes.js';
+import { isAllowedPath, isRetrySafe, isResourceCreatingPath, parseResourceAffinity, createdResourceFromResponse } from './routes.js';
 import { callUpstream, type UpstreamResponse } from './upstream.js';
 import { classifyError, classifyStatus, parseRetryAfterMs, retryBackoffMs, sleep } from './retry.js';
 import type { AppDeps, KeyConfig } from './app.js';
@@ -67,7 +67,12 @@ async function sendUpstreamResponse(
   reply.code(response.statusCode);
 
   const type = contentType(response.headers).toLowerCase();
-  const canInspectJson = deps.config.resourceAffinity && statusIsSuccess(response.statusCode) && type.includes('application/json') && !type.includes('text/event-stream');
+  const canInspectJson = deps.config.resourceAffinity
+    && request.method === 'POST'
+    && statusIsSuccess(response.statusCode)
+    && type.includes('application/json')
+    && !type.includes('text/event-stream')
+    && isResourceCreatingPath(pathname);
 
   if (!canInspectJson) {
     return reply.send(response.body);
@@ -100,7 +105,7 @@ function recordLog(deps: AppDeps, record: Parameters<AppDeps['state']['recordReq
 
 function recordAttempt(deps: AppDeps, record: Parameters<AppDeps['state']['recordAttempt']>[0]): void {
   deps.state.recordAttempt(record);
-  deps.scheduler.updateAdaptiveStats(deps.state.listKeyStats());
+  deps.scheduler.scheduleAdaptiveUpdate(deps.state);
 }
 
 export async function proxyHandler(request: FastifyRequest, reply: FastifyReply, deps: AppDeps): Promise<FastifyReply | void> {
@@ -133,21 +138,32 @@ export async function proxyHandler(request: FastifyRequest, reply: FastifyReply,
   let lastResponse: UpstreamResponse | undefined;
   let lastErrorReason = 'unknown_error';
 
-  const affinityChoice = chooseAffinityKey(pathname, deps, Date.now());
-  if (affinityChoice.unavailable) {
-    finalErrorCode = 'affinity_key_unavailable';
-    recordLog(deps, { requestId, tokenId, method: request.method, path: pathname, status: 503, keyIds, attempts: 0, latencyMs: Date.now() - start, errorCode: finalErrorCode });
-    return reply.code(503).send(proxyError('affinity_key_unavailable', 'The key that owns this resource is not currently available.', requestId));
-  }
+  // Create an AbortController that cancels upstream when client disconnects.
+  // IMPORTANT: We listen on request.socket (the TCP connection) rather than
+  // request.raw, because IncomingMessage 'close' fires when the request body
+  // stream is consumed — immediately after the POST body is fully received —
+  // NOT when the client actually disconnects.  We also check reply.raw.writableEnded
+  // to avoid aborting the upstream on normal completion (socket close after
+  // response has already been sent).
+  const clientDisconnect = new AbortController();
+  const onSocketClose = () => {
+    if (!reply.raw.writableEnded) clientDisconnect.abort();
+  };
+  request.socket.on('close', onSocketClose);
+
+  const affinityChoice = chooseAffinityKey(pathname, deps, start);
+  // When the affinity key is unavailable, fall back to normal key selection
+  // instead of returning 503 — this gracefully degrades for stateless endpoints.
+  const affinityKey = affinityChoice.key;
 
   try {
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
       const now = Date.now();
-      const key = attempt === 0 && affinityChoice.key ? affinityChoice.key : deps.scheduler.next(now, attempted);
+      const key = attempt === 0 && affinityKey ? affinityKey : deps.scheduler.next(now, attempted);
       if (!key) break;
       attempted.add(key.id);
       keyIds.push(key.id);
-      const attemptStart = Date.now();
+      const attemptStart = now;
 
       try {
         const upstream = await callUpstream({
@@ -156,7 +172,8 @@ export async function proxyHandler(request: FastifyRequest, reply: FastifyReply,
           method: request.method,
           headers: buildUpstreamHeaders(request.headers, { upstreamKey: key.value, requestId }),
           body,
-          timeoutMs: deps.config.attemptTimeoutMs
+          timeoutMs: deps.config.attemptTimeoutMs,
+          signal: clientDisconnect.signal
         });
 
         const latencyMs = Date.now() - attemptStart;
@@ -168,13 +185,20 @@ export async function proxyHandler(request: FastifyRequest, reply: FastifyReply,
 
         if (decision.reason === 'rate_limit') {
           const retryAfterMs = parseRetryAfterMs(Array.isArray(upstream.headers['retry-after']) ? upstream.headers['retry-after'][0] : upstream.headers['retry-after']);
-          const until = Date.now() + (retryAfterMs ?? deps.config.rateLimitCooldownSeconds * 1000);
-          deps.scheduler.coolDown(key.id, until, Date.now(), 'rate_limit');
+          const cooldownNow = Date.now();
+          const until = cooldownNow + (retryAfterMs ?? deps.config.rateLimitCooldownSeconds * 1000);
+          deps.scheduler.coolDown(key.id, until, cooldownNow, 'rate_limit');
           deps.state.setCooldown(key.id, until, 'rate_limit');
+        } else if (decision.reason === 'credits_exhausted') {
+          // Disable the key entirely — 402 means credits are exhausted and won't recover automatically.
+          // The key can be re-enabled via admin UI once credits are topped up.
+          deps.scheduler.setDisabled(key.id, true);
+          deps.state.setEnabled(key.id, false);
         } else if (decision.retryable) {
+          const failureNow = Date.now();
           const until = deps.scheduler.recordFailure(
             key.id,
-            Date.now(),
+            failureNow,
             deps.config.failureThreshold,
             deps.config.failureWindowSeconds * 1000,
             deps.config.cooldownSeconds * 1000,
@@ -196,9 +220,10 @@ export async function proxyHandler(request: FastifyRequest, reply: FastifyReply,
         const decision = classifyError(error);
         lastErrorReason = decision.reason;
         recordAttempt(deps, { keyId: key.id, status: null, success: false, latencyMs, retry: attempt > 0, reason: decision.reason });
+        const failureNow = Date.now();
         const until = deps.scheduler.recordFailure(
           key.id,
-          Date.now(),
+          failureNow,
           deps.config.failureThreshold,
           deps.config.failureWindowSeconds * 1000,
           deps.config.cooldownSeconds * 1000,
@@ -210,8 +235,8 @@ export async function proxyHandler(request: FastifyRequest, reply: FastifyReply,
       }
     }
   } finally {
+    request.socket.off('close', onSocketClose);
     // Ensure response body is consumed to avoid connection leaks
-    // Only clean up if we're NOT going to send this response
     if (lastResponse && !reply.sent && keyIds.length === 0) {
       try {
         await bufferBody(lastResponse);
@@ -221,8 +246,9 @@ export async function proxyHandler(request: FastifyRequest, reply: FastifyReply,
     }
   }
 
+  const endMs = Date.now();
   if (lastResponse) {
-    recordLog(deps, { requestId, tokenId, method: request.method, path: pathname, status: finalStatus, keyIds, attempts: keyIds.length, latencyMs: Date.now() - start, errorCode: logErrorCodeForUpstreamStatus(finalStatus) });
+    recordLog(deps, { requestId, tokenId, method: request.method, path: pathname, status: finalStatus, keyIds, attempts: keyIds.length, latencyMs: endMs - start, errorCode: logErrorCodeForUpstreamStatus(finalStatus) });
     const selectedKey = deps.config.keys.find((key) => key.id === keyIds[keyIds.length - 1]);
     if (!selectedKey) return reply.code(502).send(proxyError('upstream_error', 'The upstream key selection could not be resolved.', requestId));
     return sendUpstreamResponse(reply, lastResponse, request, selectedKey, deps, pathname);
@@ -230,11 +256,11 @@ export async function proxyHandler(request: FastifyRequest, reply: FastifyReply,
 
   if (keyIds.length === 0) {
     finalErrorCode = 'no_healthy_keys';
-    recordLog(deps, { requestId, tokenId, method: request.method, path: pathname, status: 503, keyIds, attempts: 0, latencyMs: Date.now() - start, errorCode: finalErrorCode });
+    recordLog(deps, { requestId, tokenId, method: request.method, path: pathname, status: 503, keyIds, attempts: 0, latencyMs: endMs - start, errorCode: finalErrorCode });
     return reply.code(503).send(proxyError('no_healthy_keys', 'No healthy Exa API key is currently available.', requestId));
   }
 
   const errorStatus = errorStatusForReason(lastErrorReason);
-  recordLog(deps, { requestId, tokenId, method: request.method, path: pathname, status: errorStatus.status, keyIds, attempts: keyIds.length, latencyMs: Date.now() - start, errorCode: errorStatus.code });
+  recordLog(deps, { requestId, tokenId, method: request.method, path: pathname, status: errorStatus.status, keyIds, attempts: keyIds.length, latencyMs: endMs - start, errorCode: errorStatus.code });
   return reply.code(errorStatus.status).send(proxyError(errorStatus.code, errorStatus.message, requestId));
 }

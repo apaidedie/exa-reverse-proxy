@@ -165,6 +165,7 @@ export function loadConfigFromEnv(env: Env = process.env): ProxyConfig {
     failureWindowSeconds: readNumber(env, 'EXA_FAILURE_WINDOW_SECONDS', 60),
     cooldownSeconds: readNumber(env, 'EXA_COOLDOWN_SECONDS', 120),
     rateLimitCooldownSeconds: readNumber(env, 'EXA_RATE_LIMIT_COOLDOWN_SECONDS', 300),
+    creditsExhaustedCooldownSeconds: readNumber(env, 'EXA_CREDITS_EXHAUSTED_COOLDOWN_SECONDS', 600),
     maxBodyBytes: readNumber(env, 'EXA_MAX_BODY_BYTES', 20971520),
     allowedPaths: allowedPaths.length > 0 ? allowedPaths : ['/**'],
     resourceAffinity: env.EXA_RESOURCE_AFFINITY !== 'false',
@@ -185,6 +186,9 @@ export function loadConfigFromEnv(env: Env = process.env): ProxyConfig {
     alertWebhookHmacSecret: readOptionalString(env, 'EXA_ALERT_WEBHOOK_HMAC_SECRET'),
     alertWebhookMaxAttempts: Math.max(1, Math.round(readNumber(env, 'EXA_ALERT_WEBHOOK_MAX_ATTEMPTS', 1))),
     alertWebhookRetryBackoffMs: readNumber(env, 'EXA_ALERT_WEBHOOK_RETRY_BACKOFF_MS', 250),
-    trendWindowHours: readNumber(env, 'EXA_TREND_WINDOW_HOURS', 24)
+    trendWindowHours: readNumber(env, 'EXA_TREND_WINDOW_HOURS', 24),
+    trustProxy: env.EXA_TRUST_PROXY === 'true' ? true : env.EXA_TRUST_PROXY === 'false' ? false : (env.EXA_TRUST_PROXY ? env.EXA_TRUST_PROXY : false),
+    upstreamPoolConnections: readNumber(env, 'EXA_UPSTREAM_POOL_CONNECTIONS', 128),
+    affinityRetentionDays: readNumber(env, 'EXA_AFFINITY_RETENTION_DAYS', 7)
   };
 }

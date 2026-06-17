@@ -4,6 +4,7 @@ import { classifyError, classifyStatus, parseRetryAfterMs, retryBackoffMs } from
 describe('retry', () => {
   it('classifies retryable and non-retryable statuses', () => {
     expect(classifyStatus(429)).toEqual({ retryable: true, reason: 'rate_limit' });
+    expect(classifyStatus(402)).toEqual({ retryable: true, reason: 'credits_exhausted' });
     expect(classifyStatus(503)).toEqual({ retryable: true, reason: 'transient_status' });
     expect(classifyStatus(401)).toEqual({ retryable: false, reason: 'client_status' });
   });

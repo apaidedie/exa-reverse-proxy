@@ -20,6 +20,7 @@ export function testConfig(overrides: Partial<ProxyConfig> = {}): ProxyConfig {
     failureWindowSeconds: 60,
     cooldownSeconds: 120,
     rateLimitCooldownSeconds: 300,
+    creditsExhaustedCooldownSeconds: 600,
     maxBodyBytes: 20971520,
     allowedPaths: ['/**'],
     resourceAffinity: true,
@@ -41,6 +42,9 @@ export function testConfig(overrides: Partial<ProxyConfig> = {}): ProxyConfig {
     alertWebhookMaxAttempts: 1,
     alertWebhookRetryBackoffMs: 250,
     trendWindowHours: 24,
+    trustProxy: false,
+    upstreamPoolConnections: 128,
+    affinityRetentionDays: 7,
     ...overrides
   };
 }

@@ -1,5 +1,6 @@
 import type { AppDeps } from '../app.js';
 import type { PrometheusOperationsMetrics } from '../metrics.js';
+import { percentile } from '../util/shared.js';
 
 type Buckets = ReturnType<AppDeps['state']['requestTrend']>;
 type RequestLogs = ReturnType<AppDeps['state']['listRequestLogs']>;
@@ -33,13 +34,6 @@ function trendWindowFromHours(rawHours: number | undefined, fallbackHours: numbe
   return { hours, label, bucketMs, windowMs: hours * 60 * 60 * 1000 };
 }
 
-function percentile(values: number[], ratio: number): number {
-  if (values.length === 0) return 0;
-  const sorted = [...values].sort((a, b) => a - b);
-  const index = Math.min(sorted.length - 1, Math.ceil(sorted.length * ratio) - 1);
-  return sorted[Math.max(0, index)];
-}
-
 function statusGroup(status: number): string {
   if (status >= 200 && status < 300) return '2xx';
   if (status >= 300 && status < 400) return '3xx';
@@ -53,6 +47,7 @@ function lowCardinalityReason(reason: string | null | undefined): string {
   const allowed = new Set([
     'ok',
     'rate_limit',
+    'credits_exhausted',
     'timeout',
     'upstream_timeout',
     'transient_status',
@@ -123,7 +118,8 @@ export function buildObservability(deps: AppDeps, hours?: number): Record<string
     current,
     previous,
     alerts,
-    trends
+    trends,
+    pool: deps.poolStats()
   };
 }
 
@@ -163,7 +159,18 @@ export function buildConfigSummary(deps: AppDeps): Record<string, unknown> {
   };
 }
 
+// Cache for Prometheus metrics — avoids expensive 5000-row query on every scrape
+let metricsCache: { value: PrometheusOperationsMetrics; timestamp: number } | null = null;
+const METRICS_CACHE_TTL = 30_000;
+
+export function resetMetricsCache(): void { metricsCache = null; }
+
 export function buildPrometheusOperationsMetrics(deps: AppDeps, observability: Record<string, unknown>): PrometheusOperationsMetrics {
+  const now = Date.now();
+  if (metricsCache && (now - metricsCache.timestamp) < METRICS_CACHE_TTL) {
+    return metricsCache.value;
+  }
+
   const keys = (observability.keys ?? {}) as Record<string, number>;
   const retention = (observability.retention ?? {}) as Record<string, number>;
   const alerts = Array.isArray(observability.alerts) ? observability.alerts : [];
@@ -172,7 +179,6 @@ export function buildPrometheusOperationsMetrics(deps: AppDeps, observability: R
   const logSummary = summarizeLogs(logs);
   const cooldownReasons: Record<string, number> = {};
   const upstreamErrors = { ...logSummary.upstreamErrors };
-  const now = Date.now();
   for (const key of keyStats) {
     if (key.lastError) {
       const reason = lowCardinalityReason(key.lastError);
@@ -182,7 +188,7 @@ export function buildPrometheusOperationsMetrics(deps: AppDeps, observability: R
     const reason = lowCardinalityReason(key.cooldownReason);
     cooldownReasons[reason] = (cooldownReasons[reason] ?? 0) + 1;
   }
-  return {
+  const result: PrometheusOperationsMetrics = {
     totalKeys: Number(keys.total ?? 0),
     healthyKeys: Number(keys.healthy ?? 0),
     cooldownKeys: Number(keys.cooldown ?? 0),
@@ -195,6 +201,9 @@ export function buildPrometheusOperationsMetrics(deps: AppDeps, observability: R
     requestLatencyP95Ms: logSummary.requestLatencyP95Ms,
     retriesTotal: keyStats.reduce((sum, key) => sum + Number(key.retryCount || 0), 0),
     upstreamErrors,
-    cooldownReasons
+    cooldownReasons,
+    poolStats: deps.poolStats()
   };
+  metricsCache = { value: result, timestamp: now };
+  return result;
 }

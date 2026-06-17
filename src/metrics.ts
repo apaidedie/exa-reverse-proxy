@@ -18,6 +18,7 @@ export type PrometheusOperationsMetrics = {
   retriesTotal?: number;
   upstreamErrors?: Record<string, number>;
   cooldownReasons?: Record<string, number>;
+  poolStats?: { connected: number; free: number; queued: number; running: number; pending: number; size: number } | null;
 };
 
 export function renderPrometheusKeyMetrics(rows: KeyStats[], operations?: PrometheusOperationsMetrics): string {
@@ -33,6 +34,7 @@ export function renderPrometheusKeyMetrics(rows: KeyStats[], operations?: Promet
     lines.push(`exa_proxy_key_success_total{key_id="${id}"} ${row.successCount}`);
     lines.push(`exa_proxy_key_failures_total{key_id="${id}"} ${row.failureCount}`);
     lines.push(`exa_proxy_key_rate_limits_total{key_id="${id}"} ${row.rateLimitCount}`);
+    lines.push(`exa_proxy_key_credits_exhausted_total{key_id="${id}"} ${row.creditsExhaustedCount}`);
     lines.push(`exa_proxy_key_cooldown_until_ms{key_id="${id}"} ${row.cooldownUntil}`);
   }
   if (operations) {
@@ -89,6 +91,26 @@ export function renderPrometheusKeyMetrics(rows: KeyStats[], operations?: Promet
     );
     for (const [reason, count] of Object.entries(operations.cooldownReasons ?? {}).sort(([a], [b]) => a.localeCompare(b))) {
       lines.push(`exa_proxy_cooldown_reason_total{reason="${escapeLabel(reason)}"} ${Number(count)}`);
+    }
+    const pool = operations.poolStats;
+    if (pool) {
+      lines.push(
+        '# HELP exa_proxy_pool_connected Upstream pool connected sockets',
+        '# TYPE exa_proxy_pool_connected gauge',
+        `exa_proxy_pool_connected ${pool.connected}`,
+        '# HELP exa_proxy_pool_free Upstream pool free (idle) connections',
+        '# TYPE exa_proxy_pool_free gauge',
+        `exa_proxy_pool_free ${pool.free}`,
+        '# HELP exa_proxy_pool_queued Upstream pool queued requests',
+        '# TYPE exa_proxy_pool_queued gauge',
+        `exa_proxy_pool_queued ${pool.queued}`,
+        '# HELP exa_proxy_pool_running Upstream pool running requests',
+        '# TYPE exa_proxy_pool_running gauge',
+        `exa_proxy_pool_running ${pool.running}`,
+        '# HELP exa_proxy_pool_pending Upstream pool pending requests',
+        '# TYPE exa_proxy_pool_pending gauge',
+        `exa_proxy_pool_pending ${pool.pending}`
+      );
     }
   }
   return `${lines.join('\n')}\n`;

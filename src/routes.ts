@@ -19,11 +19,33 @@ function hasIdempotencyKey(headers: HeaderBag): boolean {
   return Object.keys(headers).some((name) => name.toLowerCase() === 'idempotency-key' && headers[name] !== undefined);
 }
 
+const retrySafePostPaths = new Set(['/search', '/contents', '/answer', '/monitors']);
+
+function isRetrySafePostPath(pathname: string): boolean {
+  if (retrySafePostPaths.has(pathname)) return true;
+  const parts = pathname.split('/').filter(Boolean);
+  if (parts[0] === 'monitors' && parts[2] === 'trigger') return true;
+  if (parts[0] === 'agent' && parts[1] === 'runs' && parts[3] === 'cancel') return true;
+  if (parts[0] === 'monitors' && parts[1] === 'batch') return true;
+  return false;
+}
+
 export function isRetrySafe(method: string, pathname: string, headers: HeaderBag): boolean {
   const normalized = method.toUpperCase();
   if (normalized === 'GET' || normalized === 'HEAD' || normalized === 'OPTIONS') return true;
-  if (normalized === 'POST' && ['/search', '/contents', '/answer'].includes(pathname)) return true;
+  if (normalized === 'POST' && isRetrySafePostPath(pathname)) return true;
   return hasIdempotencyKey(headers);
+}
+
+/** POST paths that may create a new resource whose ID should be recorded for affinity. */
+export function isResourceCreatingPath(pathname: string): boolean {
+  if (pathname === '/agent/runs') return true;
+  if (pathname === '/research/v1') return true;
+  if (pathname === '/monitors') return true;
+  if (pathname === '/v0/websets') return true;
+  if (pathname === '/v0/webhooks') return true;
+  if (pathname === '/v0/imports') return true;
+  return false;
 }
 
 function segment(pathname: string, index: number): string | undefined {
@@ -44,14 +66,38 @@ export function parseResourceAffinity(pathname: string): ResourceAffinity | unde
 export function createdResourceFromResponse(method: string, pathname: string, body: unknown): ResourceAffinity | undefined {
   if (method.toUpperCase() !== 'POST' || !body || typeof body !== 'object') return undefined;
   const record = body as Record<string, unknown>;
-  const id = typeof record.id === 'string' ? record.id : undefined;
-  const researchId = typeof record.researchId === 'string' ? record.researchId : undefined;
 
-  if (pathname === '/agent/runs' && id) return { type: 'agent_run', id };
-  if (pathname === '/research/v1' && (id || researchId)) return { type: 'research', id: id ?? researchId! };
-  if (pathname === '/monitors' && id) return { type: 'monitor', id };
-  if (pathname === '/v0/websets' && id) return { type: 'webset', id };
-  if (pathname === '/v0/webhooks' && id) return { type: 'webhook', id };
-  if (pathname === '/v0/imports' && id) return { type: 'import', id };
+  function stringField(...names: string[]): string | undefined {
+    for (const name of names) {
+      const value = record[name];
+      if (typeof value === 'string' && value.length > 0) return value;
+    }
+    return undefined;
+  }
+
+  if (pathname === '/agent/runs') {
+    const id = stringField('id', 'runId');
+    if (id) return { type: 'agent_run', id };
+  }
+  if (pathname === '/research/v1') {
+    const id = stringField('id', 'researchId');
+    if (id) return { type: 'research', id };
+  }
+  if (pathname === '/monitors') {
+    const id = stringField('id', 'monitorId');
+    if (id) return { type: 'monitor', id };
+  }
+  if (pathname === '/v0/websets') {
+    const id = stringField('id', 'websetId');
+    if (id) return { type: 'webset', id };
+  }
+  if (pathname === '/v0/webhooks') {
+    const id = stringField('id', 'webhookId');
+    if (id) return { type: 'webhook', id };
+  }
+  if (pathname === '/v0/imports') {
+    const id = stringField('id', 'importId');
+    if (id) return { type: 'import', id };
+  }
   return undefined;
 }

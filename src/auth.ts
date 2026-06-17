@@ -1,12 +1,7 @@
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
+import { headerValue } from './util/shared.js';
 
 type HeaderBag = Record<string, string | string[] | undefined>;
-
-function headerValue(headers: HeaderBag, name: string): string | undefined {
-  const value = headers[name] ?? headers[name.toLowerCase()];
-  if (Array.isArray(value)) return value[0];
-  return value;
-}
 
 export function extractToken(headers: HeaderBag): string | undefined {
   const bearer = headerValue(headers, 'authorization');

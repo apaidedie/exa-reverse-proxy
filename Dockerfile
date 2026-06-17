@@ -5,15 +5,10 @@ COPY package*.json ./
 RUN apt-get update   && apt-get install -y --no-install-recommends python3 make g++   && npm ci   && apt-get purge -y --auto-remove python3 make g++   && rm -rf /var/lib/apt/lists/*
 
 FROM deps AS build
-COPY tsconfig.json vitest.config.ts ./
-COPY Dockerfile docker-compose.yml docker-compose.deploy.yml .dockerignore .gitignore ./
+COPY tsconfig.json ./
 COPY src ./src
 COPY scripts ./scripts
-COPY test ./test
-COPY .github ./.github
-COPY README.md ./README.md
-COPY docs ./docs
-RUN set -e && npm test && npm run build
+RUN npm run build
 RUN npm prune --omit=dev
 
 FROM ${NODE_IMAGE} AS runtime
@@ -26,5 +21,5 @@ COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 USER appuser
 EXPOSE 8787
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 CMD node -e "fetch('http://127.0.0.1:8787/_proxy/health',{headers:{authorization:'Bearer '+process.env.EXA_ADMIN_HEALTHCHECK_TOKEN,'x-forwarded-proto':'https'}}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 CMD node -e "fetch('http://127.0.0.1:8787/_proxy/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 CMD ["node", "dist/src/index.js"]

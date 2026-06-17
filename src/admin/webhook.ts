@@ -1,8 +1,10 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { createHmac } from 'node:crypto';
+import { request as undiciRequest } from 'undici';
 import type { AppDeps } from '../app.js';
 import { proxyError, requestIdFrom } from '../errors.js';
 import type { AdminAuthContext } from './auth.js';
+import { sleep } from '../util/shared.js';
 
 export type AlertWebhookState = {
   lastSignature: string;
@@ -56,10 +58,6 @@ function signBody(body: string, secret: string | null): string | null {
   return `sha256=${createHmac('sha256', secret).update(body).digest('hex')}`;
 }
 
-function sleep(ms: number): Promise<void> {
-  return ms > 0 ? new Promise((resolve) => setTimeout(resolve, ms)) : Promise.resolve();
-}
-
 async function deliverWebhook(deps: AppDeps, payload: Record<string, unknown>): Promise<DeliveryResult> {
   const webhookUrl = deps.config.alertWebhookUrl;
   if (!webhookUrl) return { ok: false, statusCode: null, attempts: 0, error: 'webhook disabled', signed: false };
@@ -79,15 +77,20 @@ async function deliverWebhook(deps: AppDeps, payload: Record<string, unknown>): 
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
-      const response = await fetch(webhookUrl, {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 5000);
+      const response = await undiciRequest(webhookUrl, {
         method: 'POST',
         headers,
         body,
-        signal: AbortSignal.timeout(5000)
+        signal: controller.signal
       });
-      lastStatusCode = response.status;
-      if (response.ok) return { ok: true, statusCode: response.status, attempts: attempt, error: null, signed: Boolean(signature) };
-      lastError = `HTTP ${response.status}`;
+      clearTimeout(timer);
+      // Consume body to allow connection reuse
+      for await (const _ of response.body) { /* drain */ }
+      lastStatusCode = response.statusCode;
+      if (response.statusCode >= 200 && response.statusCode < 300) return { ok: true, statusCode: response.statusCode, attempts: attempt, error: null, signed: Boolean(signature) };
+      lastError = `HTTP ${response.statusCode}`;
     } catch (error) {
       lastError = error instanceof Error ? error.message : 'webhook failed';
     }

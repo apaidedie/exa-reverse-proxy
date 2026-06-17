@@ -16,21 +16,21 @@ describe('project hygiene', () => {
     }
   });
 
-  it('keeps Docker build docs available for tests while excluding bulky docs', () => {
+  it('keeps Docker build lean by only copying build-essential files', () => {
     const dockerfile = readFileSync('Dockerfile', 'utf8');
     const dockerignore = readFileSync('.dockerignore', 'utf8');
 
-    expect(dockerfile).toContain('.gitignore');
-    expect(dockerfile).toContain('COPY docs ./docs');
-    expect(dockerfile).toContain('COPY .github ./.github');
-    expect(dockerfile).toContain('docker-compose.deploy.yml');
+    expect(dockerfile).toContain('COPY src ./src');
+    expect(dockerfile).toContain('COPY scripts ./scripts');
+    expect(dockerfile).not.toContain('COPY test');
+    expect(dockerfile).not.toContain('COPY docs');
+    expect(dockerfile).not.toContain('COPY .github');
+    expect(dockerfile).toContain('/_proxy/live');
     expect(dockerignore).toContain('*.md');
     expect(dockerignore).toContain('!README.md');
-    expect(dockerignore).toContain('!docs/*.md');
     expect(dockerignore).toContain('docs/superpowers');
     expect(dockerignore).toContain('docs/archive');
     expect(dockerignore).toContain('local-archive');
-    expect(dockerignore).not.toContain('.gitignore');
   });
 
   it('keeps local secret and legacy key files out of git', () => {

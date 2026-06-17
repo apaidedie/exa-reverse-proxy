@@ -15,7 +15,6 @@ services:
       PORT: 8787
       EXA_STATE_PATH: /data/exa-proxy.sqlite
       EXA_KEYS_FILE: /run/secrets/exa_api_key.txt
-      EXA_ADMIN_HEALTHCHECK_TOKEN: ${EXA_ADMIN_HEALTHCHECK_TOKEN:-replace_with_admin_token}
     volumes:
       - exa_proxy_data:/data
       - ./exa_api_key.txt:/run/secrets/exa_api_key.txt:ro

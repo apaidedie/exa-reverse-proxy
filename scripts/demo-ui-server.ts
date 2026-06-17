@@ -58,6 +58,7 @@ const config: ProxyConfig = {
   failureWindowSeconds: 60,
   cooldownSeconds: 300,
   rateLimitCooldownSeconds: 1800,
+  creditsExhaustedCooldownSeconds: 600,
   maxBodyBytes: 20971520,
   allowedPaths: ['/**'],
   resourceAffinity: true,
@@ -78,7 +79,10 @@ const config: ProxyConfig = {
   alertWebhookHmacSecret: null,
   alertWebhookMaxAttempts: 1,
   alertWebhookRetryBackoffMs: 250,
-  trendWindowHours: 24
+  trendWindowHours: 24,
+  trustProxy: false,
+  upstreamPoolConnections: 128,
+  affinityRetentionDays: 7
 };
 
 const app = await buildApp({ config });

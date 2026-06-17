@@ -1,8 +1,10 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import { registerAdminRoutes } from './admin.js';
+import { resetMetricsCache } from './admin/observability.js';
 import { createStateStore, type StateStore } from './state.js';
 import { KeyScheduler } from './scheduler.js';
 import { proxyHandler } from './proxy.js';
+import { initUpstreamPool, closeUpstreamPool, getPoolStats, type PoolStats } from './upstream.js';
 
 export type KeyConfig = {
   id: string;
@@ -27,6 +29,7 @@ export type ProxyConfig = {
   failureWindowSeconds: number;
   cooldownSeconds: number;
   rateLimitCooldownSeconds: number;
+  creditsExhaustedCooldownSeconds: number;
   maxBodyBytes: number;
   allowedPaths: string[];
   resourceAffinity: boolean;
@@ -48,12 +51,16 @@ export type ProxyConfig = {
   alertWebhookMaxAttempts: number;
   alertWebhookRetryBackoffMs: number;
   trendWindowHours: number;
+  trustProxy: boolean | string | number;
+  upstreamPoolConnections: number;
+  affinityRetentionDays: number;
 };
 
 export type AppDeps = {
   config: ProxyConfig;
   state: StateStore;
   scheduler: KeyScheduler;
+  poolStats: () => PoolStats | null;
 };
 
 function runLogRetention(deps: AppDeps): number {
@@ -70,6 +77,10 @@ function runLogRetention(deps: AppDeps): number {
       userAgent: null
     });
   }
+  // Also prune expired resource affinity entries
+  const affinityDays = deps.config.affinityRetentionDays > 0 ? deps.config.affinityRetentionDays : deps.config.logRetentionDays;
+  const affinityCutoff = Date.now() - affinityDays * 86400000;
+  deps.state.pruneAffinity(affinityCutoff);
   return deleted;
 }
 
@@ -81,9 +92,14 @@ function startLogRetention(deps: AppDeps): ReturnType<typeof setInterval> | null
 }
 
 export async function buildApp(options: { config: ProxyConfig }): Promise<FastifyInstance> {
+  resetMetricsCache();
+  // Initialize upstream connection pool
+  initUpstreamPool(options.config.upstreamUrl, { connections: options.config.upstreamPoolConnections || 128 });
+
   const app = Fastify({
     logger: options.config.logLevel === 'silent' ? false : { level: options.config.logLevel },
-    bodyLimit: options.config.maxBodyBytes
+    bodyLimit: options.config.maxBodyBytes,
+    trustProxy: options.config.trustProxy
   });
 
   app.removeAllContentTypeParsers();
@@ -94,12 +110,16 @@ export async function buildApp(options: { config: ProxyConfig }): Promise<Fastif
   const state = createStateStore(options.config.statePath, options.config.keys);
   const scheduler = new KeyScheduler(options.config.keys, options.config.selectionStrategy);
   scheduler.updateAdaptiveStats(state.listKeyStats());
-  const deps = { config: options.config, state, scheduler };
+  const deps = { config: options.config, state, scheduler, poolStats: getPoolStats };
   runLogRetention(deps);
   const logRetentionTimer = startLogRetention(deps);
 
+  // Unauthenticated liveness probe for load balancers and orchestrators
+  app.get('/_proxy/live', async () => ({ ok: true, keys: options.config.keys.length }));
+
   app.addHook('onClose', async () => {
     if (logRetentionTimer) clearInterval(logRetentionTimer);
+    closeUpstreamPool();
     state.close();
   });
 

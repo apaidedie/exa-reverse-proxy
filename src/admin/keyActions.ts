@@ -54,6 +54,10 @@ export async function testConfiguredKey(deps: AppDeps, key: KeyConfig, requestId
       const until = Date.now() + (parseRetryAfterMs(retryAfter) ?? deps.config.rateLimitCooldownSeconds * 1000);
       deps.scheduler.coolDown(key.id, until, Date.now(), 'rate_limit');
       deps.state.setCooldown(key.id, until, 'rate_limit');
+    } else if (decision.reason === 'credits_exhausted') {
+      // Disable the key entirely — 402 means credits are exhausted and won't recover automatically.
+      deps.scheduler.setDisabled(key.id, true);
+      deps.state.setEnabled(key.id, false);
     } else if (decision.retryable) {
       const until = deps.scheduler.recordFailure(key.id, Date.now(), deps.config.failureThreshold, deps.config.failureWindowSeconds * 1000, deps.config.cooldownSeconds * 1000, decision.reason);
       if (until) deps.state.setCooldown(key.id, until, decision.reason);

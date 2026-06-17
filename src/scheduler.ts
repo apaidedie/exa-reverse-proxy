@@ -28,6 +28,8 @@ export class KeyScheduler {
   private pointer = 0;
   private adaptiveSeqCache: { seq: string[]; timestamp: number } | null = null;
   private readonly CACHE_TTL = 1000; // 1 second cache for adaptive sequence
+  private adaptiveUpdateTimer: ReturnType<typeof setTimeout> | null = null;
+  private adaptiveUpdatePending = false;
 
   constructor(keys: SchedulerKey[], private readonly strategy: ProxyConfig['selectionStrategy']) {
     for (const key of keys) {
@@ -113,17 +115,31 @@ export class KeyScheduler {
       const failureRate = clamp(Number(stat.failureCount || 0) / total, 0, 1);
       const rateLimitRate = clamp(Number(stat.rateLimitCount || 0) / total, 0, 1);
       const timeoutRate = clamp(Number(stat.timeoutCount || 0) / total, 0, 1);
+      const creditsExhaustedRate = clamp(Number(stat.creditsExhaustedCount || 0) / total, 0, 1);
       const latencyMs = Math.max(1, Number(stat.lastLatencyMs || 500));
       const reliabilityFactor = clamp(0.25 + successRate * 1.25, 0.25, 1.5);
       const latencyFactor = clamp(1000 / latencyMs, 0.25, 2.5);
       const lastStatus = Number(stat.lastStatus || 0);
-      const statusPenalty = lastStatus === 429 ? 3 : lastStatus >= 500 ? 1.5 : 0;
+      const statusPenalty = lastStatus === 429 ? 3 : lastStatus === 402 ? 4 : lastStatus >= 500 ? 1.5 : 0;
       const errorPenalty = stat.lastError ? 0.5 : 0;
-      const penalty = 1 + failureRate * 3 + rateLimitRate * 6 + timeoutRate * 4 + statusPenalty + errorPenalty;
+      const penalty = 1 + failureRate * 3 + rateLimitRate * 6 + timeoutRate * 4 + creditsExhaustedRate * 8 + statusPenalty + errorPenalty;
       const score = clamp(state.key.weight * reliabilityFactor * latencyFactor / penalty, 0.05, 16);
       const weight = Math.round(clamp(score * 6, 1, 16));
       this.adaptive.set(stat.id, { score: Number(score.toFixed(4)), weight });
     }
+  }
+
+  /** Debounced adaptive stats update — at most once per second to avoid hot-path overhead */
+  scheduleAdaptiveUpdate(state: { listKeyStats(): KeyStats[] }): void {
+    if (this.adaptiveUpdatePending) return;
+    this.adaptiveUpdatePending = true;
+    if (this.adaptiveUpdateTimer) return; // already scheduled
+    this.adaptiveUpdateTimer = setTimeout(() => {
+      this.adaptiveUpdateTimer = null;
+      this.adaptiveUpdatePending = false;
+      this.updateAdaptiveStats(state.listKeyStats());
+    }, 1000);
+    this.adaptiveUpdateTimer.unref?.();
   }
 
   getById(id: string, now: number): SchedulerKey | undefined {

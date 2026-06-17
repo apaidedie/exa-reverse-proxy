@@ -65,6 +65,7 @@ test.beforeAll(async () => {
     failureWindowSeconds: 60,
     cooldownSeconds: 60,
     rateLimitCooldownSeconds: 60,
+    creditsExhaustedCooldownSeconds: 600,
     maxBodyBytes: 20971520,
     allowedPaths: ['/**'],
     resourceAffinity: true,
@@ -85,7 +86,10 @@ test.beforeAll(async () => {
     alertWebhookHmacSecret: 'e2e-signing-secret',
     alertWebhookMaxAttempts: 1,
     alertWebhookRetryBackoffMs: 1,
-    trendWindowHours: 24
+    trendWindowHours: 24,
+    trustProxy: false,
+    upstreamPoolConnections: 128,
+    affinityRetentionDays: 7
   };
 
   app = await buildApp({ config });

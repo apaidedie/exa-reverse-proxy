@@ -4,6 +4,12 @@ import { extractToken, isAuthorized, presentedTokenId, tokenId } from '../auth.j
 import { proxyError, requestIdFrom } from '../errors.js';
 import type { AppDeps } from '../app.js';
 import type { AdminSessionRecord } from '../state.js';
+import { headerValue as sharedHeaderValue } from '../util/shared.js';
+
+// Wrapper that accepts FastifyRequest for backward compatibility with admin code
+export function headerValue(request: FastifyRequest, name: string): string | undefined {
+  return sharedHeaderValue(request.headers, name);
+}
 
 type AuthFailureState = { failures: number[]; lockedUntil: number };
 
@@ -17,12 +23,6 @@ export type AdminAuthContext = {
   logout(request: FastifyRequest, reply: any): Promise<Record<string, unknown> | void>;
   sessionSummary(request: FastifyRequest): Record<string, unknown> | null;
 };
-
-export function headerValue(request: FastifyRequest, name: string): string | undefined {
-  const value = request.headers[name] ?? request.headers[name.toLowerCase()];
-  if (Array.isArray(value)) return value[0];
-  return value;
-}
 
 export function parseJsonBody<T extends Record<string, unknown>>(request: FastifyRequest): Partial<T> {
   const body = request.body;
@@ -59,6 +59,21 @@ function isSecureRequest(request: FastifyRequest): boolean {
 export function createAdminAuth(deps: AppDeps): AdminAuthContext {
   const adminFailures = new Map<string, AuthFailureState>();
   deps.state.pruneAdminSessions(Date.now());
+
+  // Periodically clean up stale auth failure entries to prevent memory leaks
+  const cleanupInterval = setInterval(() => {
+    const now = Date.now();
+    const windowMs = deps.config.adminLockoutWindowSeconds * 1000;
+    for (const [key, state] of adminFailures) {
+      const recentFailures = state.failures.filter((time) => now - time <= windowMs);
+      if (recentFailures.length === 0 && state.lockedUntil <= now) {
+        adminFailures.delete(key);
+      } else {
+        state.failures = recentFailures;
+      }
+    }
+  }, 60_000);
+  cleanupInterval.unref?.();
 
   function lockoutLeftMs(request: FastifyRequest): number {
     const state = adminFailures.get(authBucket(request));

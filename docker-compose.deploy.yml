@@ -1,6 +1,13 @@
+# One-click deployment: copy .env.example → .env, place your Exa keys in exa_api_key.txt, then run:
+#   docker compose -f docker-compose.deploy.yml up -d
+#
+# For external access, change the port binding from "127.0.0.1:8787" to "8787"
+# or place behind a reverse proxy (Caddy/Nginx) for HTTPS termination.
+
 services:
   exa-proxy:
     image: al1ya/exa-reverse-proxy:latest
+    container_name: exa-proxy
     restart: unless-stopped
     ports:
       - "127.0.0.1:8787:8787"
@@ -11,8 +18,6 @@ services:
       PORT: 8787
       EXA_STATE_PATH: /data/exa-proxy.sqlite
       EXA_KEYS_FILE: /run/secrets/exa_api_key.txt
-      EXA_ADMIN_REQUIRE_HTTPS: "true"
-      EXA_ADMIN_ALLOW_RAW_KEY_DISPLAY: "false"
     volumes:
       - exa_proxy_data:/data
       - ./exa_api_key.txt:/run/secrets/exa_api_key.txt:ro
