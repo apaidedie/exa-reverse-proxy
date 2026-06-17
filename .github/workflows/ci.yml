@@ -26,12 +26,10 @@ jobs:
         run: npm run verify
 
       - name: Prepare Docker Compose inputs
-        run: |
-          cp .env.example .env
-          printf '%s\n' 'ci_fake_exa_key' > exa_api_key.txt
+        run: cp .env.example .env
 
       - name: Validate Docker Compose
-        run: docker compose -f docker-compose.yml config --no-interpolate
+        run: docker compose config --no-interpolate
 
       - name: Build Docker image
         run: docker compose build

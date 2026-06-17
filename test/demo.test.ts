@@ -31,12 +31,11 @@ describe('demo ui script', () => {
     expect(readme).toContain('npm run restore:docker');
     expect(readme).toContain('POST /_proxy/keys');
 
-    expect(checklist).toContain('scripts\\prepare-deployment.bat');
+    expect(checklist).toContain('EXA_KEYS_ENCRYPTION_SECRET');
     expect(checklist).not.toContain('http://127.0.0.1:8787/_proxy/ui');
-    expect(checklist).toContain('运行所有测试');
-    expect(checklist).toContain('EXA_KEYS_FILE=/run/secrets/exa_api_key.txt');
-    expect(checklist).toContain('EXA_ALERT_WEBHOOK_COOLDOWN_SECONDS=300');
-    expect(checklist).toContain('管理员 Token');
+    expect(checklist).toContain('EXA_PROXY_TOKENS');
+    expect(checklist).toContain('/_proxy/keys');
+    expect(checklist).toContain('管理员令牌');
     expect(vitestConfig).toContain("include: ['test/**/*.test.ts']");
   });
 });

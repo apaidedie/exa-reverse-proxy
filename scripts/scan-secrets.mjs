@@ -25,7 +25,7 @@ const findings = [];
 
 for (const file of trackedFiles()) {
   const name = basename(file);
-  if (name === '.env.example' || name === 'secrets.example.json' || name === 'secrets.schema.json') continue;
+  if (name === '.env.example') continue;
 
   if (riskyFilePatterns.some((pattern) => pattern.test(name))) {
     findings.push(`${file}: risky filename is tracked`);

@@ -83,9 +83,7 @@ describe('project hygiene', () => {
     const docs = [
       'docs/README.md',
       'docs/DEPLOYMENT.md',
-      'docs/DEPLOYMENT_CHECKLIST.md',
-      'docs/DOCKER_TROUBLESHOOTING.md',
-      'docs/QUICK_START.md'
+      'docs/DEPLOYMENT_CHECKLIST.md'
     ].map((path) => readFileSync(path, 'utf8')).join('\n');
     const scripts = [
       'scripts/prepare-deployment.bat',
