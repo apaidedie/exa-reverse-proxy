@@ -47,6 +47,7 @@ export type KeyStats = {
   id: string;
   enabled: boolean;
   weight: number;
+  value: string | null;
   totalRequests: number;
   successCount: number;
   failureCount: number;
@@ -61,6 +62,13 @@ export type KeyStats = {
   lastLatencyMs: number | null;
   lastSuccessAt: number | null;
   lastFailureAt: number | null;
+};
+
+export type PersistentKey = {
+  id: string;
+  value: string;
+  weight: number;
+  enabled: boolean;
 };
 
 export type RequestLog = Omit<RequestLogRecord, 'keyIds'> & { createdAt: number; keyIds: string[] };
@@ -124,6 +132,11 @@ export type StateStore = {
   setCooldown(keyId: string, untilMs: number, reason: string | null): void;
   setEnabled(keyId: string, enabled: boolean): void;
   listKeyStats(): KeyStats[];
+  upsertKey(id: string, encryptedValue: string, weight: number, enabled: boolean): void;
+  deleteKey(id: string): void;
+  listPersistentKeys(): PersistentKey[];
+  getKeyValue(id: string): string | null;
+  keyCount(): number;
   setAffinity(type: string, id: string, keyId: string): void;
   getAffinity(type: string, id: string): string | undefined;
   pruneAffinity(olderThanMs: number): number;
@@ -305,6 +318,9 @@ export function createStateStore(path: string, keys: KeyConfig[]): StateStore {
   if (!columns.some((col) => col.name === 'credits_exhausted_count')) {
     db.exec('ALTER TABLE key_stats ADD COLUMN credits_exhausted_count INTEGER NOT NULL DEFAULT 0');
   }
+  if (!columns.some((col) => col.name === 'value')) {
+    db.exec('ALTER TABLE key_stats ADD COLUMN value TEXT');
+  }
 
   // --- Pre-prepare all static SQL statements ---
   const stmtUpsertKey = db.prepare(`
@@ -312,6 +328,16 @@ export function createStateStore(path: string, keys: KeyConfig[]): StateStore {
     VALUES (@id, @enabled, @weight)
     ON CONFLICT(id) DO UPDATE SET weight = excluded.weight
   `);
+  const stmtUpsertKeyWithValue = db.prepare(`
+    INSERT INTO key_stats (id, enabled, weight, value)
+    VALUES (@id, @enabled, @weight, @value)
+    ON CONFLICT(id) DO UPDATE SET weight = excluded.weight, value = COALESCE(excluded.value, key_stats.value)
+  `);
+  const stmtDeleteKey = db.prepare('DELETE FROM key_stats WHERE id = ?');
+  const stmtDeleteAffinityForKey = db.prepare('DELETE FROM resource_affinity WHERE key_id = ?');
+  const stmtListPersistentKeys = db.prepare('SELECT id, value, weight, enabled FROM key_stats WHERE value IS NOT NULL ORDER BY id');
+  const stmtGetKeyValue = db.prepare('SELECT value FROM key_stats WHERE id = ?');
+  const stmtCountKeys = db.prepare('SELECT COUNT(*) AS count FROM key_stats');
   const stmtRecordAttempt = db.prepare(`
     UPDATE key_stats SET
       total_requests = total_requests + 1,
@@ -371,16 +397,9 @@ export function createStateStore(path: string, keys: KeyConfig[]): StateStore {
   const stmtDeleteSession = db.prepare('DELETE FROM admin_sessions WHERE id = ?');
   const stmtPruneSessions = db.prepare('DELETE FROM admin_sessions WHERE expires_at <= ?');
 
-  // Initialize keys
-  for (const key of keys) stmtUpsertKey.run({ id: key.id, enabled: key.enabled ? 1 : 0, weight: key.weight });
-  const keyIds = keys.map((key) => key.id);
-  if (keyIds.length === 0) {
-    db.prepare('DELETE FROM key_stats').run();
-    db.prepare('DELETE FROM resource_affinity').run();
-  } else {
-    const placeholders = keyIds.map(() => '?').join(', ');
-    db.prepare(`DELETE FROM key_stats WHERE id NOT IN (${placeholders})`).run(...keyIds);
-    db.prepare(`DELETE FROM resource_affinity WHERE key_id NOT IN (${placeholders})`).run(...keyIds);
+  // Initialize keys: seed config keys into DB (DB is source of truth, never delete existing DB keys)
+  for (const key of keys) {
+    stmtUpsertKey.run({ id: key.id, enabled: key.enabled ? 1 : 0, weight: key.weight });
   }
 
   function keyStatsFromRow(row: any): KeyStats {
@@ -388,6 +407,7 @@ export function createStateStore(path: string, keys: KeyConfig[]): StateStore {
       id: row.id,
       enabled: bool(row.enabled),
       weight: row.weight,
+      value: row.value ?? null,
       totalRequests: row.total_requests,
       successCount: row.success_count,
       failureCount: row.failure_count,
@@ -436,6 +456,29 @@ export function createStateStore(path: string, keys: KeyConfig[]): StateStore {
     },
     listKeyStats() {
       return stmtListKeyStats.all().map(keyStatsFromRow);
+    },
+    upsertKey(id, encryptedValue, weight, enabled) {
+      stmtUpsertKeyWithValue.run({ id, enabled: enabled ? 1 : 0, weight, value: encryptedValue });
+    },
+    deleteKey(id) {
+      stmtDeleteAffinityForKey.run(id);
+      stmtDeleteKey.run(id);
+    },
+    listPersistentKeys() {
+      return stmtListPersistentKeys.all().map((row: any) => ({
+        id: row.id,
+        value: row.value,
+        weight: row.weight,
+        enabled: bool(row.enabled)
+      }));
+    },
+    getKeyValue(id) {
+      const row = stmtGetKeyValue.get(id) as { value: string | null } | undefined;
+      return row?.value ?? null;
+    },
+    keyCount() {
+      const row = stmtCountKeys.get() as { count: number };
+      return row.count;
     },
     setAffinity(type, id, keyId) {
       stmtSetAffinity.run(type, id, keyId, Date.now());

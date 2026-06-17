@@ -47,6 +47,7 @@ const config: ProxyConfig = {
     { id: 'key_05_archive', value: 'fake_key_05', weight: 1, enabled: true },
     { id: 'key_06_backup', value: 'fake_key_06', weight: 1, enabled: true }
   ],
+  encryptionSecret: 'demo-encryption-secret-32ch',
   proxyTokens: ['client_local_token'],
   adminTokens: ['admin_local_token'],
   statePath,

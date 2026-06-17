@@ -14,10 +14,8 @@ services:
       HOST: 0.0.0.0
       PORT: 8787
       EXA_STATE_PATH: /data/exa-proxy.sqlite
-      EXA_KEYS_FILE: /run/secrets/exa_api_key.txt
     volumes:
       - exa_proxy_data:/data
-      - ./exa_api_key.txt:/run/secrets/exa_api_key.txt:ro
 
 volumes:
   exa_proxy_data:

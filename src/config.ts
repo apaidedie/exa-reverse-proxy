@@ -136,9 +136,8 @@ export function loadConfigFromEnv(env: Env = process.env): ProxyConfig {
   }
 
   const keys = parseConfiguredKeys(env);
-  if (keys.length === 0) {
-    throw new Error('At least one EXA API key is required (via EXA_KEYS or EXA_KEYS_FILE)');
-  }
+  // Keys may be empty at config load time — they can be loaded from SQLite DB at startup
+  // or added later via admin API. The "at least one key" check is in buildApp().
 
   const upstreamUrl = env.EXA_UPSTREAM_URL ?? 'https://api.exa.ai';
   try {
@@ -154,6 +153,7 @@ export function loadConfigFromEnv(env: Env = process.env): ProxyConfig {
     port: readNumber(env, 'PORT', 8787),
     upstreamUrl,
     keys,
+    encryptionSecret: env.EXA_KEYS_ENCRYPTION_SECRET ?? '',
     proxyTokens,
     adminTokens,
     statePath: env.EXA_STATE_PATH ?? './exa-proxy.sqlite',

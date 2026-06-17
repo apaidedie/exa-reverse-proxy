@@ -5,6 +5,7 @@ import { callUpstream, type UpstreamResponse } from '../upstream.js';
 import type { AppDeps, KeyConfig } from '../app.js';
 import type { AdminAuthContext } from './auth.js';
 import { parseJsonBody } from './auth.js';
+import { encrypt } from '../crypto.js';
 
 type KeyTestResult = { ok: boolean; id: string; status: number; latencyMs: number; reason: string };
 
@@ -15,12 +16,15 @@ async function consumeBody(response: UpstreamResponse): Promise<void> {
 }
 
 export function adminKeyStats(deps: AppDeps): Array<Record<string, unknown>> {
-  const displayById = new Map(deps.config.keys.map((key) => [key.id, key.value]));
-  return deps.state.listKeyStats().map((key) => ({
-    ...key,
-    displayId: deps.config.allowRawKeyDisplay ? displayById.get(key.id) ?? key.id : key.id,
-    rawKeyDisplayAllowed: deps.config.allowRawKeyDisplay
-  }));
+  return deps.state.listKeyStats().map((key) => {
+    const keyConfig = deps.scheduler.getKey(key.id);
+    return {
+      ...key,
+      value: undefined,
+      displayId: deps.config.allowRawKeyDisplay ? (keyConfig?.value ?? key.id) : key.id,
+      rawKeyDisplayAllowed: deps.config.allowRawKeyDisplay
+    };
+  });
 }
 
 function recordAttempt(deps: AppDeps, record: Parameters<AppDeps['state']['recordAttempt']>[0]): void {
@@ -113,7 +117,7 @@ export function registerKeyActionRoutes(app: FastifyInstance, deps: AppDeps, aut
         deps.state.setCooldown(id, 0, null);
         results.push({ id, reset: true });
       } else if (action === 'test') {
-        const key = deps.config.keys.find((item) => item.id === id);
+        const key = deps.scheduler.getKey(id);
         if (!key) {
           results.push({ id, ok: false, reason: 'key_not_found' });
         } else {
@@ -146,7 +150,7 @@ export function registerKeyActionRoutes(app: FastifyInstance, deps: AppDeps, aut
   app.post('/_proxy/keys/:id/test', async (request, reply) => {
     if (!auth.requireAdmin(request, reply)) return reply;
     const id = (request.params as { id: string }).id;
-    const key = deps.config.keys.find((item) => item.id === id);
+    const key = deps.scheduler.getKey(id);
     const requestId = requestIdFrom(request.headers);
     if (!key) {
       auth.auditAdmin(request, 'test_key', false, id, 'Key not found');
@@ -167,7 +171,7 @@ export function registerKeyActionRoutes(app: FastifyInstance, deps: AppDeps, aut
     }
 
     const id = (request.params as { id: string }).id;
-    const key = deps.config.keys.find((item) => item.id === id);
+    const key = deps.scheduler.getKey(id);
     const requestId = requestIdFrom(request.headers);
     if (!key) {
       auth.auditAdmin(request, 'reveal_key_secret', false, id, 'Key not found');
@@ -184,6 +188,123 @@ export function registerKeyActionRoutes(app: FastifyInstance, deps: AppDeps, aut
     deps.scheduler.coolDown(id, 0, Date.now(), 'manual_reset');
     deps.state.setCooldown(id, 0, null);
     auth.auditAdmin(request, 'reset_circuit', true, id, 'Cooldown reset');
+    return { ok: true, id };
+  });
+
+  app.post('/_proxy/keys', async (request, reply) => {
+    if (!auth.requireAdmin(request, reply)) return reply;
+    const body = parseJsonBody<{ id: string; value: string; weight?: number }>(request);
+    const requestId = requestIdFrom(request.headers);
+    const id = String(body.id || '').trim();
+    const value = String(body.value || '').trim();
+    const weight = Number(body.weight ?? 1);
+
+    if (!id) {
+      auth.auditAdmin(request, 'create_key', false, null, 'Missing key id');
+      return reply.code(400).send(proxyError('validation_error', 'Key id is required.', requestId));
+    }
+    if (!value) {
+      auth.auditAdmin(request, 'create_key', false, id, 'Missing key value');
+      return reply.code(400).send(proxyError('validation_error', 'Key value is required.', requestId));
+    }
+    if (!Number.isInteger(weight) || weight < 1) {
+      auth.auditAdmin(request, 'create_key', false, id, 'Invalid weight');
+      return reply.code(400).send(proxyError('validation_error', 'Weight must be a positive integer.', requestId));
+    }
+    if (deps.scheduler.getKey(id)) {
+      auth.auditAdmin(request, 'create_key', false, id, 'Key already exists');
+      return reply.code(409).send(proxyError('key_exists', `Key with id '${id}' already exists.`, requestId));
+    }
+
+    const secret = deps.config.encryptionSecret;
+    const encrypted = secret ? encrypt(value, secret) : value;
+    deps.state.upsertKey(id, encrypted, weight, true);
+    deps.scheduler.addKey({ id, value, weight, enabled: true });
+    deps.scheduler.updateAdaptiveStats(deps.state.listKeyStats());
+    deps.config.keys = [...deps.config.keys, { id, value, weight, enabled: true }];
+
+    auth.auditAdmin(request, 'create_key', true, id, 'Key created');
+    return { ok: true, id, weight, enabled: true };
+  });
+
+  app.put('/_proxy/keys/:id', async (request, reply) => {
+    if (!auth.requireAdmin(request, reply)) return reply;
+    const id = (request.params as { id: string }).id;
+    const body = parseJsonBody<{ value?: string; weight?: number; enabled?: boolean }>(request);
+    const requestId = requestIdFrom(request.headers);
+
+    if (!deps.scheduler.getKey(id)) {
+      auth.auditAdmin(request, 'update_key', false, id, 'Key not found');
+      return reply.code(404).send(proxyError('key_not_found', `Key with id '${id}' was not found.`, requestId));
+    }
+
+    const patch: { value?: string; weight?: number; enabled?: boolean } = {};
+    const secret = deps.config.encryptionSecret;
+
+    if (body.value !== undefined) {
+      const value = String(body.value).trim();
+      if (!value) {
+        auth.auditAdmin(request, 'update_key', false, id, 'Empty value');
+        return reply.code(400).send(proxyError('validation_error', 'Key value cannot be empty.', requestId));
+      }
+      const encrypted = secret ? encrypt(value, secret) : value;
+      deps.state.upsertKey(id, encrypted, deps.scheduler.getKey(id)!.weight, deps.scheduler.getKey(id)!.enabled);
+      patch.value = value;
+    }
+    if (body.weight !== undefined) {
+      const weight = Number(body.weight);
+      if (!Number.isInteger(weight) || weight < 1) {
+        auth.auditAdmin(request, 'update_key', false, id, 'Invalid weight');
+        return reply.code(400).send(proxyError('validation_error', 'Weight must be a positive integer.', requestId));
+      }
+      if (body.value !== undefined) {
+        // Already upserted above, need to update weight too
+        const key = deps.scheduler.getKey(id)!;
+        const encrypted = secret ? encrypt(body.value.trim(), secret) : body.value.trim();
+        deps.state.upsertKey(id, encrypted, weight, key.enabled);
+      } else {
+        const key = deps.scheduler.getKey(id)!;
+        const existingEncrypted = deps.state.getKeyValue(id);
+        deps.state.upsertKey(id, existingEncrypted ?? '', weight, key.enabled);
+      }
+      patch.weight = weight;
+    }
+    if (body.enabled !== undefined) {
+      const enabled = Boolean(body.enabled);
+      deps.state.setEnabled(id, enabled);
+      patch.enabled = enabled;
+    }
+
+    deps.scheduler.updateKey(id, patch);
+    deps.scheduler.updateAdaptiveStats(deps.state.listKeyStats());
+
+    // Sync config.keys runtime snapshot
+    deps.config.keys = deps.config.keys.map((k) => k.id === id ? { ...k, ...patch } : k);
+
+    auth.auditAdmin(request, 'update_key', true, id, `Updated: ${Object.keys(patch).join(', ')}`);
+    return { ok: true, id };
+  });
+
+  app.delete('/_proxy/keys/:id', async (request, reply) => {
+    if (!auth.requireAdmin(request, reply)) return reply;
+    const id = (request.params as { id: string }).id;
+    const requestId = requestIdFrom(request.headers);
+
+    if (!deps.scheduler.getKey(id)) {
+      auth.auditAdmin(request, 'delete_key', false, id, 'Key not found');
+      return reply.code(404).send(proxyError('key_not_found', `Key with id '${id}' was not found.`, requestId));
+    }
+
+    if (deps.state.keyCount() <= 1) {
+      auth.auditAdmin(request, 'delete_key', false, id, 'Cannot delete last key');
+      return reply.code(409).send(proxyError('last_key', 'Cannot delete the last remaining key. At least one key is required.', requestId));
+    }
+
+    deps.state.deleteKey(id);
+    deps.scheduler.removeKey(id);
+    deps.config.keys = deps.config.keys.filter((k) => k.id !== id);
+
+    auth.auditAdmin(request, 'delete_key', true, id, 'Key deleted');
     return { ok: true, id };
   });
 }

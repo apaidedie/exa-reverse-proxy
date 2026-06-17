@@ -5,6 +5,7 @@ import { createStateStore, type StateStore } from './state.js';
 import { KeyScheduler } from './scheduler.js';
 import { proxyHandler } from './proxy.js';
 import { initUpstreamPool, closeUpstreamPool, getPoolStats, type PoolStats } from './upstream.js';
+import { encrypt, decrypt } from './crypto.js';
 
 export type KeyConfig = {
   id: string;
@@ -18,6 +19,7 @@ export type ProxyConfig = {
   port: number;
   upstreamUrl: string;
   keys: KeyConfig[];
+  encryptionSecret: string;
   proxyTokens: string[];
   adminTokens: string[];
   statePath: string;
@@ -108,14 +110,39 @@ export async function buildApp(options: { config: ProxyConfig }): Promise<Fastif
   });
 
   const state = createStateStore(options.config.statePath, options.config.keys);
-  const scheduler = new KeyScheduler(options.config.keys, options.config.selectionStrategy);
+
+  // Seed config keys with encrypted values into DB (first-time or env-based deployment)
+  const secret = options.config.encryptionSecret;
+  for (const key of options.config.keys) {
+    if (key.value && secret) {
+      state.upsertKey(key.id, encrypt(key.value, secret), key.weight, key.enabled);
+    }
+  }
+
+  // Load all keys from DB (source of truth) and decrypt values
+  const dbKeys = state.listPersistentKeys();
+  const configKeys: KeyConfig[] = dbKeys.map((dk) => ({
+    id: dk.id,
+    value: secret && dk.value ? decrypt(dk.value, secret) : dk.value,
+    weight: dk.weight,
+    enabled: dk.enabled
+  }));
+
+  if (configKeys.length === 0) {
+    throw new Error('No Exa API keys configured. Add keys via admin API or set EXA_KEYS/EXA_KEYS_FILE environment variables.');
+  }
+
+  // Update config.keys to reflect DB state (runtime snapshot)
+  options.config.keys = configKeys;
+
+  const scheduler = new KeyScheduler(configKeys, options.config.selectionStrategy);
   scheduler.updateAdaptiveStats(state.listKeyStats());
   const deps = { config: options.config, state, scheduler, poolStats: getPoolStats };
   runLogRetention(deps);
   const logRetentionTimer = startLogRetention(deps);
 
   // Unauthenticated liveness probe for load balancers and orchestrators
-  app.get('/_proxy/live', async () => ({ ok: true, keys: options.config.keys.length }));
+  app.get('/_proxy/live', async () => ({ ok: true, keys: configKeys.length }));
 
   app.addHook('onClose', async () => {
     if (logRetentionTimer) clearInterval(logRetentionTimer);

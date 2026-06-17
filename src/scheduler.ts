@@ -24,7 +24,7 @@ function clamp(value: number, min: number, max: number): number {
 export class KeyScheduler {
   private readonly states = new Map<string, KeyState>();
   private readonly adaptive = new Map<string, AdaptiveRuntime>();
-  private readonly sequence: string[];
+  private sequence: string[];
   private pointer = 0;
   private adaptiveSeqCache: { seq: string[]; timestamp: number } | null = null;
   private readonly CACHE_TTL = 1000; // 1 second cache for adaptive sequence
@@ -194,5 +194,56 @@ export class KeyScheduler {
       adaptiveScore: this.adaptiveRuntimeFor(state).score,
       adaptiveWeight: this.adaptiveRuntimeFor(state).weight
     }));
+  }
+
+  private rebuildSequence(): void {
+    this.sequence = [...this.states.values()].flatMap((state) =>
+      Array.from({ length: this.strategy === 'weighted_round_robin' ? state.key.weight : 1 }, () => state.key.id)
+    );
+    this.pointer = 0;
+    this.adaptiveSeqCache = null;
+  }
+
+  addKey(key: SchedulerKey): void {
+    if (this.states.has(key.id)) return;
+    this.states.set(key.id, {
+      key,
+      disabled: !key.enabled,
+      cooldownUntil: 0,
+      cooldownReason: null,
+      lastUsedAt: 0,
+      failureTimestamps: []
+    });
+    this.rebuildSequence();
+  }
+
+  removeKey(id: string): void {
+    if (!this.states.has(id)) return;
+    this.states.delete(id);
+    this.adaptive.delete(id);
+    this.rebuildSequence();
+  }
+
+  updateKey(id: string, patch: { value?: string; weight?: number; enabled?: boolean }): void {
+    const state = this.states.get(id);
+    if (!state) return;
+    let needsRebuild = false;
+    if (patch.value !== undefined) {
+      state.key = { ...state.key, value: patch.value };
+    }
+    if (patch.weight !== undefined && patch.weight !== state.key.weight) {
+      state.key = { ...state.key, weight: patch.weight };
+      needsRebuild = true;
+    }
+    if (patch.enabled !== undefined) {
+      state.key = { ...state.key, enabled: patch.enabled };
+      state.disabled = !patch.enabled;
+    }
+    if (needsRebuild) this.rebuildSequence();
+    else this.adaptiveSeqCache = null;
+  }
+
+  getKey(id: string): SchedulerKey | undefined {
+    return this.states.get(id)?.key;
   }
 }

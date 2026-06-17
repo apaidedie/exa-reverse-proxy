@@ -9,6 +9,7 @@ export function testConfig(overrides: Partial<ProxyConfig> = {}): ProxyConfig {
       { id: 'a', value: 'key-a', weight: 1, enabled: true },
       { id: 'b', value: 'key-b', weight: 1, enabled: true }
     ],
+    encryptionSecret: 'test-encryption-secret-32ch',
     proxyTokens: ['client_token'],
     adminTokens: ['admin_token'],
     statePath: ':memory:',

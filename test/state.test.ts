@@ -29,7 +29,7 @@ describe('StateStore', () => {
     state.close();
   });
 
-  it('removes key stats for keys that are no longer configured', () => {
+  it('preserves existing DB keys across restarts and seeds new config keys', () => {
     const dir = mkdtempSync(join(tmpdir(), 'exa-state-'));
     const dbPath = join(dir, 'state.sqlite');
 
@@ -39,7 +39,9 @@ describe('StateStore', () => {
       state.close();
 
       const nextState = createStateStore(dbPath, [{ id: 'new_key', value: 'new-secret', weight: 1, enabled: true }]);
-      expect(nextState.listKeyStats().map((key) => key.id)).toEqual(['new_key']);
+      const keyIds = nextState.listKeyStats().map((key) => key.id);
+      expect(keyIds).toContain('old_key');
+      expect(keyIds).toContain('new_key');
       nextState.close();
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -112,6 +114,41 @@ describe('StateStore', () => {
 
     expect(failures).toHaveLength(1);
     expect(failures[0]).toMatchObject({ action: 'test_key', targetId: 'a', success: false });
+    state.close();
+  });
+
+  it('manages persistent keys with encrypted values via CRUD operations', () => {
+    const state = createStateStore(':memory:', []);
+
+    // Initially empty
+    expect(state.listPersistentKeys()).toHaveLength(0);
+    expect(state.keyCount()).toBe(0);
+
+    // Add keys with encrypted values
+    state.upsertKey('k1', 'encrypted-value-1', 1, true);
+    state.upsertKey('k2', 'encrypted-value-2', 2, true);
+
+    expect(state.keyCount()).toBe(2);
+    expect(state.listPersistentKeys()).toEqual([
+      { id: 'k1', value: 'encrypted-value-1', weight: 1, enabled: true },
+      { id: 'k2', value: 'encrypted-value-2', weight: 2, enabled: true }
+    ]);
+
+    // Update existing key — upsertKey updates value and weight but preserves enabled state
+    state.upsertKey('k1', 'updated-encrypted-1', 3, false);
+    expect(state.getKeyValue('k1')).toBe('updated-encrypted-1');
+    expect(state.listPersistentKeys().find((k) => k.id === 'k1')).toMatchObject({ weight: 3, enabled: true });
+
+    // Enabled changes require setEnabled
+    state.setEnabled('k1', false);
+    expect(state.listPersistentKeys().find((k) => k.id === 'k1')).toMatchObject({ enabled: false });
+
+    // Delete a key
+    state.deleteKey('k2');
+    expect(state.keyCount()).toBe(1);
+    expect(state.listPersistentKeys().map((k) => k.id)).toEqual(['k1']);
+    expect(state.getKeyValue('k2')).toBeNull();
+
     state.close();
   });
 });

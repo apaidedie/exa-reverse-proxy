@@ -49,6 +49,7 @@ describe('KeyScheduler', () => {
         rateLimitCount: 0,
         timeoutCount: 0,
         creditsExhaustedCount: 0,
+        value: null,
         cooldownUntil: 0,
         cooldownReason: null,
         lastStatus: 200,
@@ -68,6 +69,7 @@ describe('KeyScheduler', () => {
         rateLimitCount: 12,
         timeoutCount: 6,
         creditsExhaustedCount: 0,
+        value: null,
         cooldownUntil: 0,
         cooldownReason: null,
         lastStatus: 503,
@@ -104,6 +106,7 @@ describe('KeyScheduler', () => {
         rateLimitCount: 0,
         timeoutCount: 0,
         creditsExhaustedCount: 0,
+        value: null,
         cooldownUntil: 0,
         cooldownReason: null,
         lastStatus: null,
@@ -123,6 +126,7 @@ describe('KeyScheduler', () => {
         rateLimitCount: 0,
         timeoutCount: 0,
         creditsExhaustedCount: 0,
+        value: null,
         cooldownUntil: now + 10_000,
         cooldownReason: 'rate_limit',
         lastStatus: null,
@@ -139,5 +143,34 @@ describe('KeyScheduler', () => {
       expect.objectContaining({ id: 'b', enabled: true, coolingDown: true, cooldownReason: 'rate_limit' })
     ]);
     expect(scheduler.next(now + 10_001)?.id).toBe('b');
+  });
+
+  it('supports dynamic key management via addKey, removeKey, updateKey, and getKey', () => {
+    const scheduler = new KeyScheduler(keys, 'weighted_round_robin');
+
+    // getKey returns key config
+    expect(scheduler.getKey('a')?.value).toBe('key-a');
+
+    // addKey adds a new key
+    scheduler.addKey({ id: 'c', value: 'key-c', weight: 1, enabled: true });
+    expect(scheduler.getKey('c')?.value).toBe('key-c');
+
+    const choicesAfterAdd = Array.from({ length: 12 }, () => scheduler.next(Date.now())?.id);
+    expect(choicesAfterAdd).toContain('c');
+
+    // updateKey changes weight (triggers sequence rebuild)
+    scheduler.updateKey('c', { weight: 3 });
+    expect(scheduler.getKey('c')?.weight).toBe(3);
+
+    // updateKey changes value
+    scheduler.updateKey('c', { value: 'key-c-updated' });
+    expect(scheduler.getKey('c')?.value).toBe('key-c-updated');
+
+    // removeKey removes the key
+    scheduler.removeKey('c');
+    expect(scheduler.getKey('c')).toBeUndefined();
+
+    const choicesAfterRemove = Array.from({ length: 10 }, () => scheduler.next(Date.now())?.id);
+    expect(choicesAfterRemove).not.toContain('c');
   });
 });

@@ -54,6 +54,7 @@ test.beforeAll(async () => {
       { id: 'key_02_contents', value: 'fake_key_02', weight: 1, enabled: true },
       { id: 'key_03_backup', value: 'fake_key_03', weight: 1, enabled: true }
     ],
+    encryptionSecret: 'test-encryption-secret-32ch',
     proxyTokens: ['client_local_token'],
     adminTokens: ['admin_local_token'],
     statePath: join(stateDir, 'state.sqlite'),

@@ -249,7 +249,7 @@ export async function proxyHandler(request: FastifyRequest, reply: FastifyReply,
   const endMs = Date.now();
   if (lastResponse) {
     recordLog(deps, { requestId, tokenId, method: request.method, path: pathname, status: finalStatus, keyIds, attempts: keyIds.length, latencyMs: endMs - start, errorCode: logErrorCodeForUpstreamStatus(finalStatus) });
-    const selectedKey = deps.config.keys.find((key) => key.id === keyIds[keyIds.length - 1]);
+    const selectedKey = deps.scheduler.getKey(keyIds[keyIds.length - 1]);
     if (!selectedKey) return reply.code(502).send(proxyError('upstream_error', 'The upstream key selection could not be resolved.', requestId));
     return sendUpstreamResponse(reply, lastResponse, request, selectedKey, deps, pathname);
   }

@@ -83,11 +83,13 @@ describe('project hygiene', () => {
     expect(publish).toContain('platforms: linux/amd64,linux/arm64');
   });
 
-  it('mounts the key file at the same path the container reads', () => {
+  it('uses SQLite-backed key storage in the local development compose', () => {
     const compose = readFileSync('docker-compose.yml', 'utf8');
 
-    expect(compose).toContain('EXA_KEYS_FILE: /run/secrets/exa_api_key.txt');
-    expect(compose).toContain('./exa_api_key.txt:/run/secrets/exa_api_key.txt:ro');
+    expect(compose).toContain('EXA_STATE_PATH: /data/exa-proxy.sqlite');
+    expect(compose).toContain('exa_proxy_data:/data');
+    expect(compose).not.toContain('EXA_KEYS_FILE');
+    expect(compose).not.toContain('exa_api_key.txt');
   });
 
   it('keeps the Docker Hub deployment compose ready for one-command VPS starts', () => {
@@ -95,8 +97,10 @@ describe('project hygiene', () => {
 
     expect(compose).toContain('image: al1ya/exa-reverse-proxy:latest');
     expect(compose).toContain('"127.0.0.1:8787:8787"');
-    expect(compose).toContain('EXA_KEYS_FILE: /run/secrets/exa_api_key.txt');
-    expect(compose).toContain('./exa_api_key.txt:/run/secrets/exa_api_key.txt:ro');
+    expect(compose).toContain('EXA_STATE_PATH: /data/exa-proxy.sqlite');
+    expect(compose).toContain('exa_proxy_data:/data');
+    expect(compose).not.toContain('EXA_KEYS_FILE');
+    expect(compose).not.toContain('exa_api_key.txt');
   });
 
   it('keeps user-facing docs aligned with the current verification state', () => {
