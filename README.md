@@ -149,7 +149,7 @@ Admin endpoints require one value from `EXA_ADMIN_TOKENS`. `GET /` is the recomm
 
 ## Security And Operations
 
-For production deployments, set `EXA_ADMIN_REQUIRE_HTTPS=true` when the service is behind an HTTPS reverse proxy that forwards `x-forwarded-proto: https`. Use `docker-compose.yml` for the prebuilt Docker Hub image, or combine `docker-compose.yml` with `config/docker-compose.vps.yml` when building locally. Both compose paths bind port 8787 to localhost by default. Admin sessions expire after `EXA_ADMIN_SESSION_TTL_SECONDS`; repeated failed logins are locked using `EXA_ADMIN_LOCKOUT_MAX_FAILURES`, `EXA_ADMIN_LOCKOUT_WINDOW_SECONDS`, and `EXA_ADMIN_LOCKOUT_SECONDS`.
+For production deployments, set `EXA_ADMIN_REQUIRE_HTTPS=true` when the service is behind an HTTPS reverse proxy that forwards `x-forwarded-proto: https`. Use `docker-compose.yml` for the prebuilt Docker Hub image. The compose file binds port 8787 to localhost by default. Admin sessions expire after `EXA_ADMIN_SESSION_TTL_SECONDS`; repeated failed logins are locked using `EXA_ADMIN_LOCKOUT_MAX_FAILURES`, `EXA_ADMIN_LOCKOUT_WINDOW_SECONDS`, and `EXA_ADMIN_LOCKOUT_SECONDS`.
 
 The console includes trend buckets, alert summaries, audit records, real runtime configuration, requestId trace, per-key recent failure reasons, log filtering/export, retention pruning and retention status, batch key actions, webhook status/testing, and a masked display toggle. Raw key reveal is policy-gated and audited. Request logs remain sanitized and store internal key IDs rather than raw Exa key values. The service prunes expired request logs on startup and then continues enforcing `EXA_LOG_RETENTION_DAYS` while it is running.
 

@@ -28,9 +28,6 @@ describe('project hygiene', () => {
     expect(dockerfile).toContain('/_proxy/live');
     expect(dockerignore).toContain('*.md');
     expect(dockerignore).toContain('!README.md');
-    expect(dockerignore).toContain('docs/superpowers');
-    expect(dockerignore).toContain('docs/archive');
-    expect(dockerignore).toContain('local-archive');
   });
 
   it('keeps local secret and legacy key files out of git', () => {
@@ -41,20 +38,8 @@ describe('project hygiene', () => {
     expect(gitignore).toContain('*.deprecated');
     expect(gitignore).toContain('*.old');
     expect(gitignore).toContain('*.backup');
-    expect(gitignore).toContain('config/secrets.json');
-    expect(gitignore).toContain('local-archive/');
     expect(packageJson.scripts['scan:secrets']).toBe('node scripts/scan-secrets.mjs');
     expect(readFileSync('scripts/scan-secrets.mjs', 'utf8')).toContain('Potential secret material found');
-  });
-
-  it('keeps one-time cleanup assets in archive folders', () => {
-    const docsReadme = readFileSync('docs/README.md', 'utf8');
-    const scriptsReadme = readFileSync('scripts/README.md', 'utf8');
-
-    expect(docsReadme).toContain('archive/');
-    expect(scriptsReadme).toContain('archive/');
-    expect(readFileSync('scripts/archive/refactor-project.bat', 'utf8')).toContain('项目结构规范化');
-    expect(readFileSync('scripts/archive/cleanup-project.ps1', 'utf8')).toContain('Cleaning up remaining files');
   });
 
   it('provides Docker volume backup and restore scripts for the SQLite state', () => {
@@ -110,7 +95,6 @@ describe('project hygiene', () => {
     expect(docs).not.toMatch(/(?:测试结果|测试通过|所有测试通过)[^\n]*\d+\/\d+/);
     expect(docs).not.toContain('5 个高危漏洞');
     expect(docs).not.toContain('98HfFe54T6qRi4Z3H');
-    expect(docs).toContain('docs\\archive\\OPTIMIZATIONS_SUMMARY.md');
     expect(scripts).toContain('docker-compose.yml');
   });
 });

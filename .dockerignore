@@ -8,12 +8,9 @@ tmp
 output
 test-results
 参考图
-local-archive
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
-docs/superpowers
-docs/archive
 *.log
 npm-debug.log*
 .git
