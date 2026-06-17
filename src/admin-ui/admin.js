@@ -278,6 +278,9 @@ el('importFileInput').addEventListener('change', (event) => {
 el('importModal').addEventListener('click', (event) => {
   if (event.target === el('importModal')) closeImportModal();
 });
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && el('importModal').style.display !== 'none') closeImportModal();
+});
 el('toggleSecretDisplay').addEventListener('click', () => {
   state.secretDisplay = state.secretDisplay === 'plain' ? 'masked' : 'plain';
   localStorage.setItem('exaSecretDisplay', state.secretDisplay);
