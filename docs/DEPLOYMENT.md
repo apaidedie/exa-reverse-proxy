@@ -9,7 +9,7 @@ al1ya/exa-reverse-proxy:latest
 al1ya/exa-reverse-proxy:0.1.1
 ```
 
-分享 GitHub 项目时，用户可以直接使用根目录的 `docker-compose.deploy.yml` 拉取镜像部署，不需要在服务器上构建 TypeScript 项目。
+分享 GitHub 项目时，用户可以直接使用根目录的 `docker-compose.yml` 拉取镜像部署，不需要在服务器上构建 TypeScript 项目。
 
 ## 发布到 Docker Hub
 
@@ -100,16 +100,16 @@ chmod 600 exa_api_key.txt
 
 ```bash
 # 1. 拉取镜像
-docker compose -f docker-compose.deploy.yml pull
+docker compose -f docker-compose.yml pull
 
 # 2. 启动服务
-docker compose -f docker-compose.deploy.yml up -d
+docker compose -f docker-compose.yml up -d
 
 # 3. 查看日志
-docker compose -f docker-compose.deploy.yml logs -f
+docker compose -f docker-compose.yml logs -f
 
 # 4. 检查状态
-docker compose -f docker-compose.deploy.yml ps
+docker compose -f docker-compose.yml ps
 ```
 
 ---
@@ -142,7 +142,7 @@ EXA_FAILURE_THRESHOLD=3
 EXA_COOLDOWN_SECONDS=120
 ```
 
-### `docker-compose.deploy.yml` 文件
+### `docker-compose.yml` 文件
 
 ```yaml
 services:
@@ -218,10 +218,10 @@ curl -H "Authorization: Bearer 你的管理员Token" \
 ### 更新镜像
 ```bash
 # 1. 拉取最新版本
-docker compose -f docker-compose.deploy.yml pull
+docker compose -f docker-compose.yml pull
 
 # 2. 重启服务
-docker compose -f docker-compose.deploy.yml up -d
+docker compose -f docker-compose.yml up -d
 
 # 3. 清理旧镜像
 docker image prune -f

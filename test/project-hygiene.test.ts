@@ -83,17 +83,8 @@ describe('project hygiene', () => {
     expect(publish).toContain('platforms: linux/amd64,linux/arm64');
   });
 
-  it('uses SQLite-backed key storage in the local development compose', () => {
+  it('keeps a single deployment compose file ready for one-command VPS starts', () => {
     const compose = readFileSync('docker-compose.yml', 'utf8');
-
-    expect(compose).toContain('EXA_STATE_PATH: /data/exa-proxy.sqlite');
-    expect(compose).toContain('exa_proxy_data:/data');
-    expect(compose).not.toContain('EXA_KEYS_FILE');
-    expect(compose).not.toContain('exa_api_key.txt');
-  });
-
-  it('keeps the Docker Hub deployment compose ready for one-command VPS starts', () => {
-    const compose = readFileSync('docker-compose.deploy.yml', 'utf8');
 
     expect(compose).toContain('image: al1ya/exa-reverse-proxy:latest');
     expect(compose).toContain('"127.0.0.1:8787:8787"');
@@ -120,6 +111,6 @@ describe('project hygiene', () => {
     expect(docs).not.toContain('5 个高危漏洞');
     expect(docs).not.toContain('98HfFe54T6qRi4Z3H');
     expect(docs).toContain('docs\\archive\\OPTIMIZATIONS_SUMMARY.md');
-    expect(scripts).toContain('docker-compose.deploy.yml');
+    expect(scripts).toContain('docker-compose.yml');
   });
 });

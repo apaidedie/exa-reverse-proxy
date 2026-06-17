@@ -1,10 +1,16 @@
+# One-click deployment: copy .env.example → .env, configure your tokens and encryption secret, then run:
+#   docker compose up -d
+#
+# Keys can be added via the admin API (POST /_proxy/keys) — stored encrypted in SQLite.
+# Alternatively, set EXA_KEYS in .env for env-based key loading.
+#
+# For external access, change the port binding from "127.0.0.1:8787" to "8787"
+# or place behind a reverse proxy (Caddy/Nginx) for HTTPS termination.
+
 services:
   exa-proxy:
-    build:
-      context: .
-      args:
-        NODE_IMAGE: ${NODE_IMAGE:-node:22-bookworm-slim}
-    image: exa-reverse-proxy:local
+    image: al1ya/exa-reverse-proxy:latest
+    container_name: exa-proxy
     restart: unless-stopped
     ports:
       - "127.0.0.1:8787:8787"

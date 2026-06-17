@@ -22,7 +22,7 @@ function runDocker(dockerArgs, options = {}) {
   return result;
 }
 
-const composeFile = readOption('--compose-file', 'docker-compose.deploy.yml');
+const composeFile = readOption('--compose-file', 'docker-compose.yml');
 const serviceName = readOption('--service', 'exa-proxy');
 const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
 const outputPath = resolve(firstPositional() ?? `backups/exa-proxy-state-${timestamp}.tar.gz`);

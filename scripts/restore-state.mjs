@@ -38,7 +38,7 @@ if (!existsSync(archivePath)) {
   process.exit(1);
 }
 
-const composeFile = readOption('--compose-file', 'docker-compose.deploy.yml');
+const composeFile = readOption('--compose-file', 'docker-compose.yml');
 const serviceName = readOption('--service', 'exa-proxy');
 const noRestart = args.includes('--no-restart');
 const archive = readFileSync(archivePath);

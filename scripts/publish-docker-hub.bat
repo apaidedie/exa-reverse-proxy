@@ -80,6 +80,6 @@ echo To use on VPS:
 echo   docker pull %DOCKER_USERNAME%/%IMAGE_NAME%:%IMAGE_TAG%
 echo   docker run -d -p 127.0.0.1:8787:8787 --env-file .env -v exa_proxy_data:/data -v %%cd%%\exa_api_key.txt:/run/secrets/exa_api_key.txt:ro -e EXA_STATE_PATH=/data/exa-proxy.sqlite -e EXA_KEYS_FILE=/run/secrets/exa_api_key.txt %DOCKER_USERNAME%/%IMAGE_NAME%:%IMAGE_TAG%
 echo.
-echo Or use docker-compose.deploy.yml and set image: %DOCKER_USERNAME%/%IMAGE_NAME%:%IMAGE_TAG%
+echo Or use docker-compose.yml and set image: %DOCKER_USERNAME%/%IMAGE_NAME%:%IMAGE_TAG%
 echo.
 pause
