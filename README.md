@@ -5,190 +5,143 @@
 [![Docker Image Size](https://img.shields.io/docker/image-size/al1ya/exa-reverse-proxy/latest?logo=docker&label=image%20size)](https://hub.docker.com/r/al1ya/exa-reverse-proxy/tags)
 [![Version](https://img.shields.io/badge/version-0.1.1-blue)](https://github.com/apaidedie/exa-reverse-proxy/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Node](https://img.shields.io/badge/node-%3E%3D22-green?logo=node.js)](https://github.com/apaidedie/exa-reverse-proxy/blob/main/package.json)
 
-Docker-deployable reverse proxy for Exa that balances requests across multiple upstream Exa API keys while exposing one Exa-compatible endpoint.
+Exa API 反向代理，将多把上游 Key 池化为一个统一端点，支持智能调度、自动故障转移和中文运维控制台。
 
-## One-Line Deploy (Docker Hub)
-
-The fastest path on any VPS with Docker installed — pull the prebuilt image and bring it up:
+## 一键部署
 
 ```bash
-# 1. Fetch the deployment compose file
 curl -fsSL https://raw.githubusercontent.com/apaidedie/exa-reverse-proxy/main/docker-compose.yml -o docker-compose.yml
 curl -fsSL https://raw.githubusercontent.com/apaidedie/exa-reverse-proxy/main/.env.example -o .env
 
-# 2. Put your real Exa API keys (one per line, or id:key:weight) in a secrets file
-printf '%s\n' 'your_real_exa_key' > exa_api_key.txt
+$EDITOR .env   # 设置 EXA_KEYS_ENCRYPTION_SECRET、EXA_PROXY_TOKENS、EXA_ADMIN_TOKENS
 
-# 3. Set your own client/admin tokens in .env, then start
-$EDITOR .env   # set EXA_PROXY_TOKENS, EXA_ADMIN_TOKENS, EXA_ADMIN_HEALTHCHECK_TOKEN
 docker compose up -d
 ```
 
-The service listens on `127.0.0.1:8787` by default (put it behind your HTTPS reverse proxy). Verify with:
+服务默认监听 `127.0.0.1:8787`，建议放在 HTTPS 反向代理（Caddy/Nginx）后面。验证：
 
 ```bash
-curl -H "Authorization: Bearer admin_local_token" http://127.0.0.1:8787/_proxy/health
+curl -H "Authorization: Bearer <管理员令牌>" http://127.0.0.1:8787/_proxy/health
 ```
 
-Pin a specific release with `image: al1ya/exa-reverse-proxy:0.1.1` if you do not want `latest`.
+> **控制台预览：** 本地运行 `npm run demo:ui`，打开 `http://127.0.0.1:8787` 即可体验内置 Web UI。
 
-> **Admin console preview:** run `npm run demo:ui` locally and open `http://127.0.0.1:8787` to explore the built-in Web UI (keys, usage, logs, observability). Screenshots are welcome in `docs/screenshots/`.
+## 功能
 
-## Features
+- **多 Key 池化** — 多把 Exa API Key 轮询/加权/自适应调度，对下游暴露单一端点
+- **智能故障转移** — 自动处理 429 限流、5xx 瞬态错误、超时和连接异常，安全重试
+- **密钥管理** — API Key 通过管理接口增删改，AES-256-GCM 加密存储在 SQLite 中
+- **资源亲和** — 同一资源的后续请求自动路由到创建该资源的 Key
+- **运维控制台** — 内置中文 Web UI，覆盖 Key 状态、请求日志、趋势分析、告警、审计
+- **Prometheus 指标** — `/_proxy/metrics` 暴露 Key 计数、P95 延迟、错误分布等指标
 
-* Pools multiple upstream Exa API keys behind one service.
-* Authenticates downstream clients with proxy-owned tokens.
-* Selects healthy keys with round-robin, weighted round-robin, least-recently-used, or adaptive weighted scheduling.
-* Fails over on rate limits, transient upstream statuses, timeouts, and connection errors when retrying is safe.
-* Tracks per-key usage, cooldowns, request logs, and resource affinity in SQLite.
-* Serves a built-in Chinese admin console for key pool operations, usage, alerts, logs, and admin audit. Raw key reveal is policy-gated and audited. The console UI is split across HTML, CSS, and ES modules under `src/admin-ui/`, subscribes to SSE live refresh hints, and is served with a strict CSP.
+## 配置
 
-## Quick Start
-
-### Use The Docker Hub Image
-
-See the **One-Line Deploy** section at the top — clone/fetch `docker-compose.yml`, drop your Exa keys in `exa_api_key.txt`, set tokens in `.env`, and `docker compose up -d`. The prebuilt `al1ya/exa-reverse-proxy:latest` image persists SQLite data in a Docker volume and binds `127.0.0.1:8787` for safer reverse-proxy deployments. Pin `image: al1ya/exa-reverse-proxy:0.1.1` if you want a fixed release instead of `latest`.
-
-### Build Locally
-
-1. Copy `.env.example` to `.env`.
-2. Put real Exa keys in `exa_api_key.txt` or replace `EXA_KEYS` entries, then set proxy/admin tokens.
-3. Start the service:
-
-```bash
-docker compose up --build -d
-```
-
-4. Check health:
-
-```bash
-curl -H "Authorization: Bearer admin_local_token" http://127.0.0.1:8787/_proxy/health
-```
-
-5. Call Exa through the proxy:
-
-```bash
-curl -X POST http://127.0.0.1:8787/search   -H "Authorization: Bearer client_local_token"   -H "Content-Type: application/json"   -d '{"query":"latest LLM research","numResults":3}'
-```
-
-## 本地控制台演示
-
-不接真实 Exa Key 时，可以直接启动内置演示环境查看运维控制台：
-
-```bash
-npm run demo:ui
-```
-
-打开 `http://127.0.0.1:8787`，使用管理员令牌 `admin_local_token` 登录。管理员令牌来自 `EXA_ADMIN_TOKENS`，用于进入控制台和管理接口，不是 Exa API Key。脚本会自动灌入 6 把模拟密钥、成功请求、429 限流、503 临时错误、504 超时、冷却状态和 1 把禁用密钥，方便检查表格、右侧详情和请求日志。客户端令牌为 `client_local_token`。
-
-## Configuration
-
-See `.env.example` for the full environment contract. `EXA_KEYS` uses comma-separated `id:key:weight` entries, for example:
+最小 `.env`：
 
 ```dotenv
-EXA_KEYS=exa_a:replace_with_exa_key_a:1,exa_b:replace_with_exa_key_b:2
-EXA_PROXY_TOKENS=client_local_token
-EXA_ADMIN_TOKENS=admin_local_token
-EXA_ADMIN_HEALTHCHECK_TOKEN=admin_local_token
+EXA_KEYS_ENCRYPTION_SECRET=<随机加密密钥>
+EXA_PROXY_TOKENS=<客户端令牌，至少16字符>
+EXA_ADMIN_TOKENS=<管理员令牌，至少16字符>
 ```
 
-For large pools, use `EXA_KEYS_FILE` instead of a huge environment variable. The file can be one raw Exa key per line, or `id:key:weight` when you want stable key IDs across reorders. Lines like `EXA_API_KEY=...`, blank lines, duplicate keys, and `#` comments are handled safely. Docker Compose mounts local `exa_api_key.txt` read-only at `/run/secrets/exa_api_key.txt`.
+其余配置均有合理默认值，按需添加即可。完整可选项参见 `.env.example`。
 
-```text
-# exa_api_key.txt
-stable_prod_a:replace_with_exa_key_a:2
-stable_prod_b:replace_with_exa_key_b:1
-replace_with_exa_key_without_custom_id
-```
+### Key 管理方式
+
+**方式一：环境变量种子（首次启动）**
 
 ```dotenv
-EXA_KEYS_FILE=/run/secrets/exa_api_key.txt
-EXA_PROXY_TOKENS=client_local_token
-EXA_ADMIN_TOKENS=admin_local_token
+EXA_KEYS=exa_a:your_key_a:1,exa_b:your_key_b:2
 ```
 
-`EXA_ADMIN_TOKENS` is the console/admin API login token. It is separate from real Exa API keys and is never forwarded upstream. A successful console login creates a server-side admin session, so the browser does not need to keep sending the admin token after login.
+**方式二：管理接口（推荐，运行时增删改）**
 
-Alert webhooks are disabled unless `EXA_ALERT_WEBHOOK_URL` is set. When enabled, active observability alerts are sent as sanitized JSON and deduplicated by `EXA_ALERT_WEBHOOK_COOLDOWN_SECONDS`; use `EXA_ALERT_WEBHOOK_BEARER_TOKEN` if the receiver expects a bearer token, `EXA_ALERT_WEBHOOK_HMAC_SECRET` for `x-exa-alert-signature`, and `EXA_ALERT_WEBHOOK_MAX_ATTEMPTS` / `EXA_ALERT_WEBHOOK_RETRY_BACKOFF_MS` for simple retry/backoff.
+启动后通过 `POST /_proxy/keys` 添加 Key，值会加密存入 SQLite，重启不丢失。详见下方管理接口章节。
 
-`EXA_SELECTION_STRATEGY=adaptive_weighted` enables adaptive key-pool routing. The scheduler starts from each key's configured weight, then raises or lowers runtime weight from observed success rate, recent latency, 429s, 5xx/transient failures, and timeouts. Existing `round_robin`, `weighted_round_robin`, and `least_recently_used` behavior remains available.
+## 管理接口
 
-Raw Exa keys must never be committed. The proxy injects upstream keys as `x-api-key` and strips downstream `Authorization`, `x-api-key`, proxy auth, and hop-by-hop headers before forwarding. By default, the admin API does not bulk-return raw Exa keys. Raw key display can be enabled only with `EXA_ADMIN_ALLOW_RAW_KEY_DISPLAY=true`; keep it disabled on VPS deployments unless there is a short maintenance need.
+所有接口需要 `EXA_ADMIN_TOKENS` 中的令牌进行认证。
 
-## Admin API
+### Key 管理
 
-Admin endpoints require one value from `EXA_ADMIN_TOKENS`. `GET /` is the recommended built-in Web UI entry and asks for the admin token in the browser; `GET /_proxy/ui` remains a 兼容入口 for older bookmarks.
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `GET` | `/_proxy/keys` | Key 状态与调度器快照 |
+| `POST` | `/_proxy/keys` | 创建 Key（`id`, `value`, `weight`） |
+| `PUT` | `/_proxy/keys/:id` | 更新 Key（`value`/`weight`/`enabled`） |
+| `DELETE` | `/_proxy/keys/:id` | 删除 Key（至少保留一把） |
+| `POST` | `/_proxy/keys/:id/test` | 单 Key 健康检查 |
+| `POST` | `/_proxy/keys/:id/disable` | 禁用 Key |
+| `POST` | `/_proxy/keys/:id/enable` | 启用 Key |
+| `POST` | `/_proxy/keys/:id/reset-circuit` | 清除冷却 |
+| `POST` | `/_proxy/keys/:id/secret` | 查看明文（需 `EXA_ADMIN_ALLOW_RAW_KEY_DISPLAY=true`） |
+| `POST` | `/_proxy/keys/batch` | 批量 enable/disable/reset/test |
 
-* `GET /` - built-in Web UI for keys, usage, and request logs.
-* `GET /_proxy/ui` - compatibility alias for the built-in Web UI.
-* `GET /_proxy/health` - service health and configured key count.
-* `GET /_proxy/config-summary` - sanitized runtime configuration for the console.
-* `POST /_proxy/session` - create a server-side admin session; failed attempts are rate-limited.
-* `DELETE /_proxy/session` - revoke the current admin session.
-* `GET /_proxy/keys` - key stats and scheduler state. By default `displayId` is the internal key ID and the response never returns a `value` field.
-* `GET /_proxy/keys/:id/failures` - recent sanitized failure summary for one key.
-* `GET /_proxy/logs?limit=100&path=/search&status=4xx` - filtered proxy request logs with key IDs only.
-* `GET /_proxy/logs/trace/:requestId` - requestId trace across matching request log records.
-* `GET /_proxy/logs/export` - export filtered request logs as CSV.
-* `POST /_proxy/logs/prune` - prune request logs older than a cutoff or retention day count.
-* `GET /_proxy/observability` - trend buckets, failure/429 spike detection, available-key alerts, log-retention summary, and alert webhook status.
-* `POST /_proxy/alerts/webhook/test` - send a sanitized test alert to the configured webhook.
-* `GET /_proxy/events` - authenticated SSE stream for console refresh hints.
-* `GET /_proxy/audit?limit=50` - admin login and operation audit records.
-* `GET /_proxy/audit/export` - export filtered admin audit records as CSV.
-* `GET /_proxy/metrics` - Prometheus-style key counters plus healthy/cooldown key counts, active alerts, log-retention gauges, status groups, p95 latency, retry totals, low-cardinality error reasons, and cooldown reasons.
-* `POST /_proxy/keys/batch` - batch enable, disable, reset, or test selected keys.
-* `POST /_proxy/keys/:id/disable` - manually disable a key.
-* `POST /_proxy/keys/:id/enable` - re-enable a key.
-* `POST /_proxy/keys/:id/test` - test one upstream key with a health-check search.
-* `POST /_proxy/keys/:id/secret` - reveal one raw key only when `EXA_ADMIN_ALLOW_RAW_KEY_DISPLAY=true`; every attempt is audited.
-* `POST /_proxy/keys/:id/reset-circuit` - clear cooldown for a key.
+### 日志与可观测
 
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `GET` | `/_proxy/health` | 服务健康状态 |
+| `GET` | `/_proxy/logs` | 请求日志（支持 `limit`/`path`/`status` 过滤） |
+| `GET` | `/_proxy/logs/trace/:requestId` | 请求链路追踪 |
+| `GET` | `/_proxy/logs/export` | 导出日志 CSV |
+| `POST` | `/_proxy/logs/prune` | 清理过期日志 |
+| `GET` | `/_proxy/observability` | 趋势、告警、保留策略概览 |
+| `GET` | `/_proxy/metrics` | Prometheus 指标 |
+| `GET` | `/_proxy/events` | SSE 实时推送流 |
 
-## Security And Operations
+### 审计与会话
 
-For production deployments, set `EXA_ADMIN_REQUIRE_HTTPS=true` when the service is behind an HTTPS reverse proxy that forwards `x-forwarded-proto: https`. Use `docker-compose.yml` for the prebuilt Docker Hub image. The compose file binds port 8787 to localhost by default. Admin sessions expire after `EXA_ADMIN_SESSION_TTL_SECONDS`; repeated failed logins are locked using `EXA_ADMIN_LOCKOUT_MAX_FAILURES`, `EXA_ADMIN_LOCKOUT_WINDOW_SECONDS`, and `EXA_ADMIN_LOCKOUT_SECONDS`.
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `POST` | `/_proxy/session` | 创建管理会话 |
+| `DELETE` | `/_proxy/session` | 注销会话 |
+| `GET` | `/_proxy/audit` | 管理操作审计记录 |
+| `GET` | `/_proxy/audit/export` | 导出审计 CSV |
+| `POST` | `/_proxy/alerts/webhook/test` | 测试告警 Webhook |
+| `GET` | `/_proxy/config-summary` | 脱敏运行配置 |
+| `GET` | `/_proxy/keys/:id/failures` | 单 Key 故障摘要 |
 
-The console includes trend buckets, alert summaries, audit records, real runtime configuration, requestId trace, per-key recent failure reasons, log filtering/export, retention pruning and retention status, batch key actions, webhook status/testing, and a masked display toggle. Raw key reveal is policy-gated and audited. Request logs remain sanitized and store internal key IDs rather than raw Exa key values. The service prunes expired request logs on startup and then continues enforcing `EXA_LOG_RETENTION_DAYS` while it is running.
+## 安全
 
-The admin UI serves HTML with `no-store`, injects hashed `?v=` asset URLs, returns long-lived immutable cache headers for versioned assets, and exposes `/_proxy/ui/asset-manifest.json` with SHA-256 hashes. Production builds generate the same manifest under `dist/src/admin-ui/`.
+- 上游 Key 以 `x-api-key` 注入，下游请求中的 `Authorization`、`x-api-key` 等头在转发前被剥离
+- 管理端明文 Key 默认不展示，需 `EXA_ADMIN_ALLOW_RAW_KEY_DISPLAY=true` 开启，每次查看均记录审计
+- 生产环境建议 `EXA_ADMIN_REQUIRE_HTTPS=true`（配合 HTTPS 反向代理）
+- 管理会话有过期时间（`EXA_ADMIN_SESSION_TTL_SECONDS`），失败登录有锁定机制
+- 请求日志只存内部 Key ID，不存明文 Key 值
 
-### SQLite Operations
+## 运维
 
-The state database is a normal SQLite file with WAL enabled. For backup, stop the container or use SQLite's online backup tooling against `EXA_STATE_PATH`; copy the main database together with `-wal` and `-shm` files when the service is still running. For restore, stop the service, replace the database files as a set, then start the service and check `/_proxy/health`, `/_proxy/keys`, and `/_proxy/metrics`.
-
-For Docker deployments, use the packaged backup helpers. `backup:docker` stops the compose service, archives `/data/exa-proxy.sqlite*`, and starts the service again. `restore:docker` requires `--yes` because it replaces the state files in the Docker volume.
+### SQLite 备份与恢复
 
 ```bash
 npm run backup:docker
-npm run restore:docker -- backups/exa-proxy-state-2026-06-14T00-00-00-000Z.tar.gz --yes
+npm run restore:docker -- backups/exa-proxy-state-*.tar.gz --yes
 ```
 
-For long-running deployments, keep `EXA_LOG_RETENTION_DAYS` enabled, monitor WAL size next to the database file, and schedule periodic maintenance during a quiet window:
+### 长期运行维护
 
 ```bash
+# WAL 检查点 + 压缩
 sqlite3 /data/exa-proxy.sqlite "PRAGMA wal_checkpoint(TRUNCATE); VACUUM; PRAGMA integrity_check;"
-sqlite3 /data/exa-proxy.sqlite "PRAGMA index_list('request_logs'); PRAGMA index_list('admin_audit_logs');"
 ```
 
-## Development
+服务启动时自动清理过期请求日志，运行期间持续执行 `EXA_LOG_RETENTION_DAYS` 策略。
+
+## 开发
 
 ```bash
 npm ci
-npm run verify
-npm run scan:secrets
-npm run test:e2e
-npm run dev
+npm run dev          # 本地启动
+npm run verify       # lint + test + build
+npm run demo:ui      # 控制台演示（无需真实 Key）
+npm run test:e2e     # E2E 测试
 ```
 
-CI runs on Node.js 22.x, matching the Docker image. Local Node.js 22 or newer is supported; if `better-sqlite3` was compiled under a different Node version, run `npm rebuild better-sqlite3`.
+需要 Node.js 22+。Docker 镜像基于 `node:22-bookworm-slim`。
 
-For local development without Docker, provide environment variables matching `.env.example`; the default listen address is `0.0.0.0:8787`. Deployment notes are in `docs/DEPLOYMENT.md`.
+## 许可
 
-## Notes
-
-* Resource affinity is enabled by default so follow-up requests for created resources prefer the key that created them.
-* Streaming responses such as `text/event-stream` pass through without JSON parsing.
-* Request logs and metrics use internal key IDs and never include raw Exa key values. The authenticated admin console can reveal a single raw key only when the server-side policy allows it, and every reveal attempt is audited.
+[MIT](LICENSE)

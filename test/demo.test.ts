@@ -21,20 +21,15 @@ describe('demo ui script', () => {
     const checklist = readFileSync('docs/DEPLOYMENT_CHECKLIST.md', 'utf8');
     const vitestConfig = readFileSync('vitest.config.ts', 'utf8');
 
-    expect(readme).toContain('本地控制台演示');
+    expect(readme).toContain('控制台预览');
     expect(readme).toContain('npm run demo:ui');
-    expect(readme).toContain('http://127.0.0.1:8787`');
+    expect(readme).toContain('http://127.0.0.1:8787');
     expect(readme).not.toContain('http://127.0.0.1:8787/_proxy/ui');
     expect(readme).toContain('管理员令牌');
-    expect(readme).toContain('EXA_KEYS_FILE');
-    expect(readme).toContain('exa_api_key.txt');
-    expect(readme).toContain('stable_prod_a:replace_with_exa_key_a:2');
+    expect(readme).toContain('AES-256-GCM');
     expect(readme).toContain('npm run backup:docker');
     expect(readme).toContain('npm run restore:docker');
-    expect(readme).toContain('`GET /`');
-    expect(readme).toContain('兼容入口');
-    expect(readme).toContain('docs/DEPLOYMENT.md');
-    expect(readme).not.toContain('docs/vps-deployment.md');
+    expect(readme).toContain('POST /_proxy/keys');
 
     expect(checklist).toContain('scripts\\prepare-deployment.bat');
     expect(checklist).not.toContain('http://127.0.0.1:8787/_proxy/ui');
