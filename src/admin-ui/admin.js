@@ -139,6 +139,61 @@ async function keyAction(id, action) {
   await refresh();
 }
 
+function parseImportText(text) {
+  return text.split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      // Try JSON: {"id":"...","value":"...","weight":1}
+      if (line.startsWith('{')) {
+        try { return JSON.parse(line); } catch { return { value: line }; }
+      }
+      const parts = line.split(':');
+      if (parts.length >= 3) return { id: parts[0], value: parts.slice(1, -1).join(':'), weight: Number(parts[parts.length - 1]) || 1 };
+      if (parts.length === 2) return { id: parts[0], value: parts[1] };
+      return { value: line };
+    });
+}
+
+function openImportModal() {
+  el('importTextarea').value = '';
+  el('importFileInput').value = '';
+  el('importFileName').textContent = '';
+  el('importPreview').textContent = '';
+  el('confirmImport').disabled = false;
+  el('confirmImport').textContent = '开始导入';
+  el('importModal').style.display = 'flex';
+  el('importTextarea').focus();
+}
+
+function closeImportModal() {
+  el('importModal').style.display = 'none';
+}
+
+async function submitImport() {
+  const text = el('importTextarea').value.trim();
+  if (!text) { showToast('请先粘贴或导入密钥'); return; }
+  const keys = parseImportText(text);
+  if (!keys.length) { showToast('未解析到有效密钥'); return; }
+
+  el('confirmImport').disabled = true;
+  el('confirmImport').textContent = '导入中...';
+  try {
+    const result = await api('/_proxy/keys/import', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ keys })
+    });
+    showToast('导入完成：成功 ' + fmt(result.imported) + '，跳过 ' + fmt(result.skipped) + (result.totalErrors ? '，错误 ' + fmt(result.totalErrors) : ''));
+    closeImportModal();
+    await refresh();
+  } catch (error) {
+    showToast('导入失败：' + error.message);
+    el('confirmImport').disabled = false;
+    el('confirmImport').textContent = '开始导入';
+  }
+}
+
 function connectEventStream() {
   if (!window.EventSource || state.events || !currentSessionId()) return;
   const source = new EventSource('/_proxy/events?sessionId=' + encodeURIComponent(currentSessionId()));
@@ -199,6 +254,30 @@ el('testWebhook').addEventListener('click', () => testWebhook().catch((error) =>
 el('timeRange').addEventListener('change', () => refresh().catch((error) => showToast(error.message)));
 el('batchTestPage').addEventListener('click', () => batchKeyAction('test', state.pageKeyIds).catch((error) => showToast(error.message)));
 el('batchDisableProblems').addEventListener('click', () => batchKeyAction('disable', state.problemKeyIds).catch((error) => showToast(error.message)));
+el('bulkImportBtn').addEventListener('click', openImportModal);
+el('closeImportModal').addEventListener('click', closeImportModal);
+el('cancelImport').addEventListener('click', closeImportModal);
+el('confirmImport').addEventListener('click', () => submitImport().catch((error) => showToast(error.message)));
+el('importTextarea').addEventListener('input', () => {
+  const text = el('importTextarea').value.trim();
+  const lines = text ? text.split(/\r?\n/).filter((l) => l.trim()).length : 0;
+  el('importPreview').textContent = lines ? '已识别 ' + lines + ' 行密钥' : '';
+});
+el('importFileInput').addEventListener('change', (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+  el('importFileName').textContent = file.name;
+  const reader = new FileReader();
+  reader.onload = () => {
+    const text = String(reader.result || '');
+    el('importTextarea').value = text;
+    el('importTextarea').dispatchEvent(new Event('input'));
+  };
+  reader.readAsText(file);
+});
+el('importModal').addEventListener('click', (event) => {
+  if (event.target === el('importModal')) closeImportModal();
+});
 el('toggleSecretDisplay').addEventListener('click', () => {
   state.secretDisplay = state.secretDisplay === 'plain' ? 'masked' : 'plain';
   localStorage.setItem('exaSecretDisplay', state.secretDisplay);

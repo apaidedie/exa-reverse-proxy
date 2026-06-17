@@ -102,6 +102,7 @@
             <button id="batchTestPage" class="ghost-btn" type="button">测试当前页</button>
             <button id="batchDisableProblems" class="danger-btn" type="button">禁用异常</button>
             <button id="toggleSecretDisplay" class="ghost-btn" type="button">脱敏显示</button>
+            <button id="bulkImportBtn" class="primary-btn" type="button">批量导入</button>
           </div>
         </div>
         <div class="table-scroll key-table-scroll">
@@ -171,6 +172,32 @@
       </div>
     </aside>
   </div>
+
+  <div id="importModal" class="modal-overlay" style="display:none">
+    <div class="modal">
+      <div class="modal-head">
+        <h2>批量导入密钥</h2>
+        <button id="closeImportModal" class="modal-close" type="button">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-hint">每行一个密钥，支持格式：<code>key_value</code> 或 <code>id:key_value</code> 或 <code>id:key_value:weight</code></p>
+        <textarea id="importTextarea" class="import-textarea" placeholder="粘贴密钥，每行一个..."></textarea>
+        <div class="modal-file">
+          <label class="ghost-btn file-label" for="importFileInput">从文件导入</label>
+          <input id="importFileInput" type="file" accept=".txt,.csv,.json" style="display:none">
+          <span id="importFileName" class="muted"></span>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <span id="importPreview" class="muted"></span>
+        <div class="modal-actions">
+          <button id="cancelImport" class="ghost-btn" type="button">取消</button>
+          <button id="confirmImport" class="primary-btn" type="button">开始导入</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div id="toast" class="toast"></div>
 <script type="module" src="/_proxy/ui/admin.js"></script>
 </body>

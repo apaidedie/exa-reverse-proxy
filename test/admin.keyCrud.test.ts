@@ -203,4 +203,85 @@ describe('admin key CRUD', () => {
     expect(seenKeys).toContain('initial-key');
     expect(seenKeys).toContain('added-key-value');
   });
+
+  it('batch imports keys via POST /_proxy/keys/import', async () => {
+    const fake = await createFakeExa(() => ({ status: 200, body: { ok: true } }));
+    apps.push(fake.app);
+    const app = await buildApp({ config: testConfig({ upstreamUrl: fake.url, keys: [] }) });
+    apps.push(app);
+
+    const result = await app.inject({
+      method: 'POST',
+      url: '/_proxy/keys/import',
+      headers: {
+        authorization: 'Bearer admin_token',
+        'content-type': 'application/json'
+      },
+      payload: {
+        keys: [
+          { id: 'bulk_1', value: 'key-value-1', weight: 1 },
+          { id: 'bulk_2', value: 'key-value-2', weight: 2 },
+          { value: 'auto-id-key' }
+        ]
+      }
+    });
+
+    expect(result.statusCode).toBe(200);
+    const body = result.json();
+    expect(body.ok).toBe(true);
+    expect(body.imported).toBe(3);
+    expect(body.skipped).toBe(0);
+
+    const keys = await app.inject({ method: 'GET', url: '/_proxy/keys', headers: { authorization: 'Bearer admin_token' } });
+    const keyIds = keys.json().keys.map((k: { id: string }) => k.id);
+    expect(keyIds).toContain('bulk_1');
+    expect(keyIds).toContain('bulk_2');
+    expect(keyIds).toContain('import_0003');
+  });
+
+  it('skips duplicate keys during batch import', async () => {
+    const fake = await createFakeExa(() => ({ status: 200, body: { ok: true } }));
+    apps.push(fake.app);
+    const app = await buildApp({ config: testConfig({ upstreamUrl: fake.url }) });
+    apps.push(app);
+
+    const result = await app.inject({
+      method: 'POST',
+      url: '/_proxy/keys/import',
+      headers: {
+        authorization: 'Bearer admin_token',
+        'content-type': 'application/json'
+      },
+      payload: {
+        keys: [
+          { id: 'a', value: 'duplicate-of-a' },
+          { id: 'new_import', value: 'brand-new-key' }
+        ]
+      }
+    });
+
+    expect(result.statusCode).toBe(200);
+    const body = result.json();
+    expect(body.imported).toBe(1);
+    expect(body.skipped).toBe(1);
+  });
+
+  it('rejects empty import array', async () => {
+    const fake = await createFakeExa(() => ({ status: 200, body: { ok: true } }));
+    apps.push(fake.app);
+    const app = await buildApp({ config: testConfig({ upstreamUrl: fake.url }) });
+    apps.push(app);
+
+    const result = await app.inject({
+      method: 'POST',
+      url: '/_proxy/keys/import',
+      headers: {
+        authorization: 'Bearer admin_token',
+        'content-type': 'application/json'
+      },
+      payload: { keys: [] }
+    });
+
+    expect(result.statusCode).toBe(400);
+  });
 });

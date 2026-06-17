@@ -307,4 +307,58 @@ export function registerKeyActionRoutes(app: FastifyInstance, deps: AppDeps, aut
     auth.auditAdmin(request, 'delete_key', true, id, 'Key deleted');
     return { ok: true, id };
   });
+
+  // Batch import: create many keys at once
+  app.post('/_proxy/keys/import', async (request, reply) => {
+    if (!auth.requireAdmin(request, reply)) return reply;
+    const body = parseJsonBody<{ keys: Array<{ id?: string; value: string; weight?: number }> }>(request);
+    const requestId = requestIdFrom(request.headers);
+    const entries = body.keys;
+
+    if (!Array.isArray(entries) || entries.length === 0) {
+      return reply.code(400).send(proxyError('validation_error', 'Request body must include a non-empty "keys" array.', requestId));
+    }
+    if (entries.length > 10000) {
+      return reply.code(400).send(proxyError('validation_error', 'Maximum 10000 keys per import.', requestId));
+    }
+
+    const secret = deps.config.encryptionSecret;
+    let imported = 0;
+    let skipped = 0;
+    const errors: Array<{ index: number; id?: string; reason: string }> = [];
+
+    for (let i = 0; i < entries.length; i++) {
+      const entry = entries[i];
+      const value = String(entry.value || '').trim();
+      if (!value) {
+        errors.push({ index: i, reason: 'Empty key value' });
+        skipped++;
+        continue;
+      }
+      const id = String(entry.id || '').trim() || `import_${String(i + 1).padStart(4, '0')}`;
+      const weight = Number(entry.weight ?? 1);
+      if (!Number.isInteger(weight) || weight < 1) {
+        errors.push({ index: i, id, reason: 'Weight must be a positive integer' });
+        skipped++;
+        continue;
+      }
+      if (deps.scheduler.getKey(id)) {
+        skipped++;
+        continue;
+      }
+
+      const encrypted = secret ? encrypt(value, secret) : value;
+      deps.state.upsertKey(id, encrypted, weight, true);
+      deps.scheduler.addKey({ id, value, weight, enabled: true });
+      deps.config.keys = [...deps.config.keys, { id, value, weight, enabled: true }];
+      imported++;
+    }
+
+    if (imported > 0) {
+      deps.scheduler.updateAdaptiveStats(deps.state.listKeyStats());
+    }
+
+    auth.auditAdmin(request, 'import_keys', true, null, `Imported ${imported} keys, skipped ${skipped}`);
+    return { ok: true, imported, skipped, errors: errors.slice(0, 50), totalErrors: errors.length };
+  });
 }
