@@ -154,6 +154,7 @@ export type StateStore = {
   touchAdminSession(sessionId: string, lastSeenAt: number): void;
   deleteAdminSession(sessionId: string): void;
   pruneAdminSessions(nowMs: number): number;
+  runTransaction(fn: () => void): void;
   close(): void;
 };
 
@@ -461,8 +462,10 @@ export function createStateStore(path: string, keys: KeyConfig[]): StateStore {
       stmtUpsertKeyWithValue.run({ id, enabled: enabled ? 1 : 0, weight, value: encryptedValue });
     },
     deleteKey(id) {
-      stmtDeleteAffinityForKey.run(id);
-      stmtDeleteKey.run(id);
+      db.transaction(() => {
+        stmtDeleteAffinityForKey.run(id);
+        stmtDeleteKey.run(id);
+      })();
     },
     listPersistentKeys() {
       return stmtListPersistentKeys.all().map((row: any) => ({
@@ -702,6 +705,9 @@ export function createStateStore(path: string, keys: KeyConfig[]): StateStore {
     pruneAdminSessions(nowMs) {
       const info = stmtPruneSessions.run(nowMs) as { changes: number };
       return info.changes;
+    },
+    runTransaction(fn: () => void): void {
+      db.transaction(fn)();
     },
     close() {
       db.close();

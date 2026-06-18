@@ -146,6 +146,7 @@ export async function buildApp(options: { config: ProxyConfig }): Promise<Fastif
 
   app.addHook('onClose', async () => {
     if (logRetentionTimer) clearInterval(logRetentionTimer);
+    scheduler.dispose();
     closeUpstreamPool();
     state.close();
   });

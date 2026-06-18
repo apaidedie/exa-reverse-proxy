@@ -79,18 +79,21 @@ async function deliverWebhook(deps: AppDeps, payload: Record<string, unknown>): 
     try {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 5000);
-      const response = await undiciRequest(webhookUrl, {
-        method: 'POST',
-        headers,
-        body,
-        signal: controller.signal
-      });
-      clearTimeout(timer);
-      // Consume body to allow connection reuse
-      for await (const _ of response.body) { /* drain */ }
-      lastStatusCode = response.statusCode;
-      if (response.statusCode >= 200 && response.statusCode < 300) return { ok: true, statusCode: response.statusCode, attempts: attempt, error: null, signed: Boolean(signature) };
-      lastError = `HTTP ${response.statusCode}`;
+      try {
+        const response = await undiciRequest(webhookUrl, {
+          method: 'POST',
+          headers,
+          body,
+          signal: controller.signal
+        });
+        // Consume body to allow connection reuse
+        for await (const _ of response.body) { /* drain */ }
+        lastStatusCode = response.statusCode;
+        if (response.statusCode >= 200 && response.statusCode < 300) return { ok: true, statusCode: response.statusCode, attempts: attempt, error: null, signed: Boolean(signature) };
+        lastError = `HTTP ${response.statusCode}`;
+      } finally {
+        clearTimeout(timer);
+      }
     } catch (error) {
       lastError = error instanceof Error ? error.message : 'webhook failed';
     }

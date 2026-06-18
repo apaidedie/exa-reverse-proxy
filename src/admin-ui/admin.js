@@ -2,7 +2,7 @@ import { api, clearToken, currentSessionId, exportAudit, exportLogs, fetchConfig
 import { displayLabelById, el, fmt, labelOf, loginToken, ms, rawKeyDisplayAllowed, stamp, state, token } from './state.js';
 import { renderDetails, renderKeys, updateSummary } from './renderKeys.js';
 import { renderAudit, renderLogTrace, renderLogs } from './renderLogs.js';
-import { renderConfigSummary, renderObservability } from './renderObservability.js';
+import { renderObservability } from './renderObservability.js';
 
 function showToast(message) {
   const toast = el('toast');
@@ -71,7 +71,6 @@ async function refresh() {
   renderKeys();
   renderLogs();
   renderObservability();
-  renderConfigSummary();
   renderAudit();
   renderLogTrace();
   if (state.selectedId) await loadKeyFailureSummary(state.selectedId).catch(() => {});
@@ -170,9 +169,6 @@ function closeImportModal() {
   el('importModal').classList.remove('modal-open');
 }
 
-// Expose modal functions globally for inline onclick fallback
-window.__closeImportModal = closeImportModal;
-
 async function submitImport() {
   const text = el('importTextarea').value.trim();
   if (!text) { showToast('请先粘贴或导入密钥'); return; }
@@ -196,7 +192,6 @@ async function submitImport() {
     el('confirmImport').textContent = '开始导入';
   }
 }
-window.__submitImport = submitImport;
 
 function connectEventStream() {
   if (!window.EventSource || state.events || !currentSessionId()) return;
@@ -254,7 +249,6 @@ el('applyLogFilters').addEventListener('click', () => fetchLogs().then((data) =>
 el('exportLogs').addEventListener('click', exportLogs);
 el('exportAudit').addEventListener('click', exportAudit);
 el('pruneLogs').addEventListener('click', () => pruneLogs().catch((error) => showToast(error.message)));
-el('testWebhook').addEventListener('click', () => testWebhook().catch((error) => showToast(error.message)));
 el('timeRange').addEventListener('change', () => refresh().catch((error) => showToast(error.message)));
 el('batchTestPage').addEventListener('click', () => batchKeyAction('test', state.pageKeyIds).catch((error) => showToast(error.message)));
 el('batchDisableProblems').addEventListener('click', () => batchKeyAction('disable', state.problemKeyIds).catch((error) => showToast(error.message)));

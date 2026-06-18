@@ -137,9 +137,21 @@ export class KeyScheduler {
     this.adaptiveUpdateTimer = setTimeout(() => {
       this.adaptiveUpdateTimer = null;
       this.adaptiveUpdatePending = false;
-      this.updateAdaptiveStats(state.listKeyStats());
+      try {
+        this.updateAdaptiveStats(state.listKeyStats());
+      } catch {
+        // Database may have been closed during shutdown — swallow silently
+      }
     }, 1000);
     this.adaptiveUpdateTimer.unref?.();
+  }
+
+  dispose(): void {
+    if (this.adaptiveUpdateTimer) {
+      clearTimeout(this.adaptiveUpdateTimer);
+      this.adaptiveUpdateTimer = null;
+      this.adaptiveUpdatePending = false;
+    }
   }
 
   getById(id: string, now: number): SchedulerKey | undefined {
@@ -215,6 +227,24 @@ export class KeyScheduler {
       failureTimestamps: []
     });
     this.rebuildSequence();
+  }
+
+  addKeys(keys: SchedulerKey[]): number {
+    let added = 0;
+    for (const key of keys) {
+      if (this.states.has(key.id)) continue;
+      this.states.set(key.id, {
+        key,
+        disabled: !key.enabled,
+        cooldownUntil: 0,
+        cooldownReason: null,
+        lastUsedAt: 0,
+        failureTimestamps: []
+      });
+      added++;
+    }
+    if (added > 0) this.rebuildSequence();
+    return added;
   }
 
   removeKey(id: string): void {

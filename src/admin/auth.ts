@@ -27,13 +27,17 @@ export type AdminAuthContext = {
 export function parseJsonBody<T extends Record<string, unknown>>(request: FastifyRequest): Partial<T> {
   const body = request.body;
   if (!body) return {};
-  if (Buffer.isBuffer(body)) {
-    const text = body.toString('utf8').trim();
-    return text ? JSON.parse(text) : {};
+  try {
+    if (Buffer.isBuffer(body)) {
+      const text = body.toString('utf8').trim();
+      return text ? JSON.parse(text) : {};
+    }
+    if (typeof body === 'string') return body.trim() ? JSON.parse(body) : {};
+    if (typeof body === 'object') return body as Partial<T>;
+    return {};
+  } catch {
+    return {};
   }
-  if (typeof body === 'string') return body.trim() ? JSON.parse(body) : {};
-  if (typeof body === 'object') return body as Partial<T>;
-  return {};
 }
 
 function requestIp(request: FastifyRequest): string {
