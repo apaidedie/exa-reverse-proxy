@@ -163,7 +163,7 @@ button { cursor: pointer; }
 /* ═══════════════════════════════════════════════
    Main content area
    ═══════════════════════════════════════════════ */
-.main { grid-column: 1; grid-row: 3; min-height: 0; padding: 14px 18px 16px; display: flex; flex-direction: column; gap: 12px; overflow: auto; }
+.main { grid-column: 1; grid-row: 3; min-height: 0; height: 100%; padding: 14px 18px 16px; display: flex; flex-direction: column; gap: 12px; overflow: auto; }
 
 /* ═══════════════════════════════════════════════
    Tab panels
