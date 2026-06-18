@@ -37,13 +37,22 @@ export function renderObservability() {
   el('trendWindowLabel').textContent = data.window?.label || '近 24 小时';
   el('trendSummary').className = 'badge ' + (alerts.some((item) => item.severity === 'bad') ? 'bad' : alerts.length ? 'warn' : 'good');
   el('trendSummary').textContent = alerts.length ? '需关注' : '稳定';
-  el('trendBars').innerHTML = trends.map((bucket) => {
+  el('trendBars').innerHTML = trends.map((bucket, i) => {
+    const title = new Date(bucket.bucketStart).toLocaleString('zh-CN', { hour12: false }) + ' 请求 ' + fmt(bucket.requests) + '，失败 ' + fmt(bucket.failures) + '，429 ' + fmt(bucket.rateLimits);
+    return '<div class="trend-bar" title="' + esc(title) + '" data-i="' + i + '"><span class="fail"></span><span class="rate"></span></div>';
+  }).join('') || '<div class="empty">暂无趋势数据。</div>';
+  // Apply dynamic heights via CSS custom properties (CSP-safe, no inline style attrs)
+  el('trendBars').querySelectorAll('.trend-bar').forEach((bar) => {
+    const i = Number(bar.dataset.i);
+    const bucket = trends[i];
+    if (!bucket) return;
     const height = Math.max(3, Math.round(Number(bucket.requests || 0) / maxRequests * 100));
     const failHeight = Number(bucket.requests || 0) ? Math.round(Number(bucket.failures || 0) / Number(bucket.requests || 1) * 100) : 0;
     const rateHeight = Number(bucket.requests || 0) ? Math.round(Number(bucket.rateLimits || 0) / Number(bucket.requests || 1) * 100) : 0;
-    const title = new Date(bucket.bucketStart).toLocaleString('zh-CN', { hour12: false }) + ' 请求 ' + fmt(bucket.requests) + '，失败 ' + fmt(bucket.failures) + '，429 ' + fmt(bucket.rateLimits);
-    return '<div class="trend-bar" title="' + esc(title) + '" style="height:' + height + '%"><span class="fail" style="height:' + failHeight + '%"></span><span class="rate" style="height:' + rateHeight + '%"></span></div>';
-  }).join('') || '<div class="empty">暂无趋势数据。</div>';
+    bar.style.setProperty('--h', height);
+    bar.querySelector('.fail').style.setProperty('--h', failHeight);
+    bar.querySelector('.rate').style.setProperty('--h', rateHeight);
+  });
   el('alertCount').textContent = fmt(alerts.length) + ' 条告警';
   el('alertList').innerHTML = alerts.length ? alerts.map((alert) => '<div class="alert-item ' + esc(alert.severity || 'warn') + '"><div class="alert-title"><span>' + esc(alert.title) + '</span><span class="badge ' + esc(alert.severity || 'warn') + '">' + (alert.severity === 'bad' ? '严重' : '关注') + '</span></div><div class="alert-message">' + esc(alert.message) + '</div></div>').join('') : '<div class="empty">暂无告警。</div>';
   renderRetention(data);

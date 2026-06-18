@@ -107,7 +107,7 @@
         </div>
         <div class="table-scroll key-table-scroll">
           <table aria-label="密钥池">
-            <thead><tr><th style="width:17%">密钥 ID</th><th style="width:7%">启用</th><th style="width:6%">权重</th><th style="width:9%">请求</th><th style="width:9%">成功</th><th style="width:7%">失败</th><th style="width:7%">429</th><th style="width:7%">超时</th><th style="width:13%">冷却</th><th style="width:18%">操作</th></tr></thead>
+            <thead><tr><th>密钥 ID</th><th>启用</th><th>权重</th><th>请求</th><th>成功</th><th>失败</th><th>429</th><th>超时</th><th>冷却</th><th>操作</th></tr></thead>
             <tbody id="keysBody"><tr><td colspan="10" class="empty">输入管理员令牌后刷新。</td></tr></tbody>
           </table>
         </div>
@@ -129,7 +129,7 @@
         </div>
         <div class="table-scroll log-table-scroll">
           <table aria-label="请求日志">
-            <thead><tr><th style="width:15%">时间</th><th style="width:12%">请求 ID</th><th style="width:6%">方法</th><th style="width:14%">路径</th><th style="width:7%">状态</th><th style="width:8%">延迟</th><th style="width:6%">尝试</th><th style="width:18%">密钥链路</th><th style="width:8%">令牌</th><th style="width:6%">错误</th></tr></thead>
+            <thead><tr><th>时间</th><th>请求 ID</th><th>方法</th><th>路径</th><th>状态</th><th>延迟</th><th>尝试</th><th>密钥链路</th><th>令牌</th><th>错误</th></tr></thead>
             <tbody id="logsBody"><tr><td colspan="10" class="empty">暂无请求日志。</td></tr></tbody>
           </table>
         </div>
@@ -184,7 +184,7 @@
         <textarea id="importTextarea" class="import-textarea" placeholder="粘贴密钥，每行一个..."></textarea>
         <div class="modal-file">
           <label class="ghost-btn file-label" for="importFileInput">从文件导入</label>
-          <input id="importFileInput" type="file" accept=".txt,.csv,.json" style="display:none">
+          <input id="importFileInput" type="file" accept=".txt,.csv,.json" class="sr-only">
           <span id="importFileName" class="muted"></span>
         </div>
       </div>
