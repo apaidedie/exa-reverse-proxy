@@ -22,14 +22,12 @@
       </form>
     </div>
   </section>
-  <div class="console-shell workbench-shell console-density-pro" data-console-shell hidden>
+  <div class="console-shell workbench-shell console-density-pro has-aside" data-console-shell hidden>
     <header class="topbar">
       <div class="brand"><div class="brand-mark">E</div><span class="brand-title">Exa 代理控制台</span><span class="brand-meta">生产</span><span id="assetVersion" class="brand-version">版本 -</span></div>
       <div class="summary">
         <div class="summary-item"><span class="summary-label">服务状态</span><span class="summary-value"><span id="serviceDot" class="status-dot"></span><span id="serviceStatus">运行中</span></span></div>
-        <div class="summary-item"><span class="summary-label">上游健康</span><span class="summary-value"><span id="upstreamDot" class="status-dot"></span><span id="upstreamHealth">正常</span></span></div>
         <div class="summary-item"><span class="summary-label">启用密钥</span><span class="summary-value" id="activeKeys">0</span></div>
-        <div class="summary-item"><span class="summary-label">冷却中密钥</span><span class="summary-value warn" id="cooldownKeys">0</span></div>
         <div class="summary-item"><span class="summary-label">请求总量</span><span class="summary-value" id="totalRequests">0</span></div>
         <div class="summary-item"><span class="summary-label">错误率</span><span class="summary-value" id="errorRate">0%</span></div>
       </div>
@@ -42,131 +40,173 @@
       </div>
     </header>
 
-    <main class="main primary-workspace" data-main-view="overview">
-      <section class="metrics metrics-compact" data-view="metrics" aria-label="控制台总览">
-        <div class="metric-card"><div class="metric-head"><span class="metric-title">用量</span><span class="metric-chip">请求</span></div><div><div class="metric-value" id="usageMetric">0</div><div class="metric-sub">近 24 小时请求</div></div><div class="metric-meter"><span id="usageMeter" class="metric-meter-fill"></span></div></div>
-        <div class="metric-card green"><div class="metric-head"><span class="metric-title">成功率</span><span class="metric-chip green">正常</span></div><div><div class="metric-value good" id="successMetric">0%</div><div class="metric-sub">成功请求</div></div><div class="metric-meter"><span id="successMeter" class="metric-meter-fill green"></span></div></div>
-        <div class="metric-card amber"><div class="metric-head"><span class="metric-title">限流 429</span><span class="metric-chip amber">重试</span></div><div><div class="metric-value warn" id="rateLimitMetric">0</div><div class="metric-sub">重试压力</div></div><div class="metric-meter"><span id="rateLimitMeter" class="metric-meter-fill amber"></span></div></div>
-        <div class="metric-card"><div class="metric-head"><span class="metric-title">平均延迟</span><span class="metric-chip">延迟</span></div><div><div class="metric-value" id="latencyMetric">0 毫秒</div><div class="metric-sub">最近响应</div></div><div class="metric-meter"><span id="latencyMeter" class="metric-meter-fill"></span></div></div>
-        <div class="metric-card red"><div class="metric-head"><span class="metric-title">失败数</span><span class="metric-chip red">异常</span></div><div><div class="metric-value bad" id="failureMetric">0</div><div class="metric-sub">含超时</div></div><div class="metric-meter"><span id="failureMeter" class="metric-meter-fill red"></span></div></div>
-      </section>
+    <nav class="tab-bar">
+      <button class="tab-btn active" data-tab="overview">概览</button>
+      <button class="tab-btn" data-tab="keys">密钥池</button>
+      <button class="tab-btn" data-tab="logs">请求日志</button>
+      <button class="tab-btn" data-tab="audit">审计与配置</button>
+      <div class="tab-spacer"></div>
+      <button id="toggleSecretDisplay" class="ghost-btn tab-action" type="button">脱敏显示</button>
+    </nav>
 
-      <section class="ops-strip" aria-label="运行态势">
-        <div class="ops-card">
-          <div class="ops-card-head"><div><h2>运行态势</h2><small>密钥池、请求链路与上游错误的当前摘要</small></div><span id="opsSeverity" class="badge good">稳定</span></div>
-          <div class="health-line">
-            <div class="health-item"><span>健康密钥</span><strong id="healthyKeyCount" class="good">0</strong></div>
-            <div class="health-item"><span>冷却处理</span><strong id="cooldownKeyCount" class="warn">0</strong></div>
-            <div class="health-item"><span>已禁用</span><strong id="disabledKeyCount">0</strong></div>
-          </div>
-          <div id="opsAlert" class="ops-alert good">暂无需要人工处理的告警。</div>
-        </div>
-        <div class="ops-card">
-          <div class="ops-card-head"><div><h2>状态分布</h2><small>健康 / 冷却 / 禁用</small></div></div>
-          <div class="state-stack">
-            <div class="state-row"><span>健康</span><div class="state-bar"><span id="healthyBar" class="state-bar-fill"></span></div><strong id="healthyPct">0%</strong></div>
-            <div class="state-row"><span>冷却</span><div class="state-bar"><span id="cooldownBar" class="state-bar-fill warn"></span></div><strong id="cooldownPct">0%</strong></div>
-            <div class="state-row"><span>禁用</span><div class="state-bar"><span id="disabledBar" class="state-bar-fill bad"></span></div><strong id="disabledPct">0%</strong></div>
-          </div>
-        </div>
-        <div class="ops-card">
-          <div class="ops-card-head"><div><h2>链路诊断</h2><small>最近请求日志与失败类型</small></div><span id="latestStatus" class="badge good">无异常</span></div>
-          <div class="diag-list">
-            <div class="diag-row"><span>最近错误</span><strong id="latestError">-</strong></div>
-            <div class="diag-row"><span>最后路径</span><strong id="latestPath" class="diag-code">-</strong></div>
-            <div class="diag-row"><span>密钥链路</span><strong id="latestChain" class="diag-code">-</strong></div>
-          </div>
-        </div>
-      </section>
+    <main class="main primary-workspace">
 
-      <section class="trend-grid" aria-label="趋势与告警">
-        <section class="panel trend-panel">
-          <div class="panel-head"><div class="panel-title"><h2>趋势视图</h2><span id="trendWindowLabel">近 24 小时</span></div><div class="toolbar"><select id="timeRange" class="select" aria-label="时间范围"><option value="1">近 1 小时</option><option value="24" selected>近 24 小时</option><option value="168">近 7 天</option></select><span id="trendSummary" class="badge good">等待数据</span></div></div>
-          <div class="trend-body">
-            <div id="trendBars" class="trend-bars"></div>
-            <div class="trend-legend"><span><i class="legend-dot"></i>请求</span><span><i class="legend-dot fail"></i>失败</span><span><i class="legend-dot rate"></i>429</span></div>
+      <div class="tab-panel active" data-tab-panel="overview">
+        <section class="metrics metrics-compact" aria-label="控制台总览">
+          <div class="metric-card"><div class="metric-head"><span class="metric-title">用量</span><span class="metric-chip">请求</span></div><div><div class="metric-value" id="usageMetric">0</div><div class="metric-sub">近 24 小时请求</div></div><div class="metric-meter"><span id="usageMeter" class="metric-meter-fill"></span></div></div>
+          <div class="metric-card green"><div class="metric-head"><span class="metric-title">成功率</span><span class="metric-chip green">正常</span></div><div><div class="metric-value good" id="successMetric">0%</div><div class="metric-sub">成功请求</div></div><div class="metric-meter"><span id="successMeter" class="metric-meter-fill green"></span></div></div>
+          <div class="metric-card amber"><div class="metric-head"><span class="metric-title">限流 429</span><span class="metric-chip amber">重试</span></div><div><div class="metric-value warn" id="rateLimitMetric">0</div><div class="metric-sub">重试压力</div></div><div class="metric-meter"><span id="rateLimitMeter" class="metric-meter-fill amber"></span></div></div>
+          <div class="metric-card"><div class="metric-head"><span class="metric-title">平均延迟</span><span class="metric-chip">延迟</span></div><div><div class="metric-value" id="latencyMetric">0 毫秒</div><div class="metric-sub">最近响应</div></div><div class="metric-meter"><span id="latencyMeter" class="metric-meter-fill"></span></div></div>
+          <div class="metric-card red"><div class="metric-head"><span class="metric-title">失败数</span><span class="metric-chip red">异常</span></div><div><div class="metric-value bad" id="failureMetric">0</div><div class="metric-sub">含超时</div></div><div class="metric-meter"><span id="failureMeter" class="metric-meter-fill red"></span></div></div>
+        </section>
+
+        <section class="ops-strip" aria-label="运行态势">
+          <div class="ops-card">
+            <div class="ops-card-head"><div><h2>运行态势</h2><small>密钥池、请求链路与上游错误的当前摘要</small></div><span id="opsSeverity" class="badge good">稳定</span></div>
+            <div class="health-line">
+              <div class="health-item"><span>健康密钥</span><strong id="healthyKeyCount" class="good">0</strong></div>
+              <div class="health-item"><span>冷却处理</span><strong id="cooldownKeyCount" class="warn">0</strong></div>
+              <div class="health-item"><span>已禁用</span><strong id="disabledKeyCount">0</strong></div>
+            </div>
+            <div id="opsAlert" class="ops-alert good">暂无需要人工处理的告警。</div>
+          </div>
+          <div class="ops-card">
+            <div class="ops-card-head"><div><h2>状态分布</h2><small>健康 / 冷却 / 禁用</small></div></div>
+            <div class="state-stack">
+              <div class="state-row"><span>健康</span><div class="state-bar"><span id="healthyBar" class="state-bar-fill"></span></div><strong id="healthyPct">0%</strong></div>
+              <div class="state-row"><span>冷却</span><div class="state-bar"><span id="cooldownBar" class="state-bar-fill warn"></span></div><strong id="cooldownPct">0%</strong></div>
+              <div class="state-row"><span>禁用</span><div class="state-bar"><span id="disabledBar" class="state-bar-fill bad"></span></div><strong id="disabledPct">0%</strong></div>
+            </div>
+          </div>
+          <div class="ops-card">
+            <div class="ops-card-head"><div><h2>链路诊断</h2><small>最近请求日志与失败类型</small></div><span id="latestStatus" class="badge good">无异常</span></div>
+            <div class="diag-list">
+              <div class="diag-row"><span>最近错误</span><strong id="latestError">-</strong></div>
+              <div class="diag-row"><span>最后路径</span><strong id="latestPath" class="diag-code">-</strong></div>
+              <div class="diag-row"><span>密钥链路</span><strong id="latestChain" class="diag-code">-</strong></div>
+            </div>
           </div>
         </section>
-        <section class="panel alert-panel">
-          <div class="panel-head"><div class="panel-title"><h2>告警中心</h2><span id="alertCount">0 条告警</span></div></div>
-          <div id="alertList" class="alert-list"><div class="empty">暂无告警。</div></div>
+
+        <section class="trend-grid" aria-label="趋势与告警">
+          <section class="panel trend-panel">
+            <div class="panel-head"><div class="panel-title"><h2>趋势视图</h2><span id="trendWindowLabel">近 24 小时</span></div><div class="toolbar"><select id="timeRange" class="select" aria-label="时间范围"><option value="1">近 1 小时</option><option value="24" selected>近 24 小时</option><option value="168">近 7 天</option></select><span id="trendSummary" class="badge good">等待数据</span></div></div>
+            <div class="trend-body">
+              <div id="trendBars" class="trend-bars"></div>
+              <div class="trend-legend"><span><i class="legend-dot"></i>请求</span><span><i class="legend-dot fail"></i>失败</span><span><i class="legend-dot rate"></i>429</span></div>
+            </div>
+          </section>
+          <section class="panel alert-panel">
+            <div class="panel-head"><div class="panel-title"><h2>告警中心</h2><span id="alertCount">0 条告警</span></div></div>
+            <div id="alertList" class="alert-list"><div class="empty">暂无告警。</div></div>
+          </section>
         </section>
-      </section>
+      </div>
 
-      <section class="panel keys-panel primary-panel" data-view="keys">
-        <div class="panel-head">
-          <div class="panel-title"><h2>密钥池</h2><span id="keyCount">0 个密钥</span></div>
-          <div class="toolbar">
-            <input id="keySearch" class="search" placeholder="搜索密钥">
-            <select id="statusFilter" class="select"><option>全部状态</option><option>健康</option><option>冷却中</option><option>已禁用</option><option>仅异常</option></select>
-            <button id="batchTestPage" class="ghost-btn" type="button">测试当前页</button>
-            <button id="batchDisableProblems" class="danger-btn" type="button">禁用异常</button>
-            <button id="toggleSecretDisplay" class="ghost-btn" type="button">脱敏显示</button>
-            <button id="bulkImportBtn" class="primary-btn" type="button">批量导入</button>
-          </div>
-        </div>
-        <div class="table-scroll key-table-scroll">
-          <table aria-label="密钥池">
-            <thead><tr><th>密钥 ID</th><th>启用</th><th>权重</th><th>请求</th><th>成功</th><th>失败</th><th>429</th><th>超时</th><th>冷却</th><th>操作</th></tr></thead>
-            <tbody id="keysBody"><tr><td colspan="10" class="empty">输入管理员令牌后刷新。</td></tr></tbody>
-          </table>
-        </div>
-        <div class="pager"><span id="keyPager">显示 0 个密钥</span><span class="pager-actions"><button id="prevKeyPage" class="mini-btn" type="button">上一页</button><strong id="keyPageLabel">第 1 页</strong><button id="nextKeyPage" class="mini-btn" type="button">下一页</button></span></div>
-      </section>
-
-      <section class="panel log-panel" data-view="logs">
-        <div class="panel-head">
-          <div class="panel-title"><h2>请求日志</h2><span id="logCount">已载入 0 条</span></div>
-          <div class="toolbar log-tools">
-            <input id="logSearch" class="search compact" placeholder="搜索日志">
-            <input id="logPathFilter" class="search compact" placeholder="路径">
-            <input id="logKeyFilter" class="search compact" placeholder="密钥">
-            <select id="logStatusFilter" class="select"><option value="">全部状态</option><option value="success">成功</option><option value="error">异常</option><option value="4xx">4xx</option><option value="5xx">5xx</option><option value="429">429</option></select>
-            <button id="applyLogFilters" class="ghost-btn" type="button">筛选</button>
-            <button id="exportLogs" class="ghost-btn" type="button">导出</button>
-            <button id="pruneLogs" class="danger-btn" type="button">清理</button>
-          </div>
-        </div>
-        <div class="table-scroll log-table-scroll">
-          <table aria-label="请求日志">
-            <thead><tr><th>时间</th><th>请求 ID</th><th>方法</th><th>路径</th><th>搜索内容</th><th>状态</th><th>延迟</th><th>尝试</th><th>密钥链路</th><th>令牌</th><th>错误</th></tr></thead>
-            <tbody id="logsBody"><tr><td colspan="11" class="empty">暂无请求日志。</td></tr></tbody>
-          </table>
-        </div>
-        <div id="tracePanel" class="trace-panel"><div class="empty">选择请求 ID 查看完整链路。</div></div>
-        <div class="pager"><span id="logPager">显示 0 条日志</span><span>每页 10 条</span></div>
-      </section>
-
-      <section class="management-grid" aria-label="审计与运行配置">
-        <section class="panel audit-panel" data-view="audit">
+      <div class="tab-panel" data-tab-panel="keys">
+        <section class="panel keys-panel primary-panel">
           <div class="panel-head">
-            <div class="panel-title"><h2>管理员审计</h2><span>登录、重置、测试与日志治理</span></div>
-            <div class="toolbar"><button id="exportAudit" class="ghost-btn" type="button">导出审计</button></div>
+            <div class="panel-title"><h2>密钥池</h2><span id="keyCount">0 个密钥</span></div>
+            <div class="toolbar">
+              <input id="keySearch" class="search" placeholder="搜索密钥">
+              <div id="keyFilterChips" class="filter-chips">
+                <button class="chip active" data-chip="All">全部 <span class="chip-count">0</span></button>
+                <button class="chip" data-chip="Healthy">健康 <span class="chip-count">0</span></button>
+                <button class="chip" data-chip="Cooldown">冷却 <span class="chip-count">0</span></button>
+                <button class="chip" data-chip="Disabled">禁用 <span class="chip-count">0</span></button>
+                <button class="chip" data-chip="Problem">异常 <span class="chip-count">0</span></button>
+              </div>
+              <button id="batchTestPage" class="ghost-btn" type="button">测试选中</button>
+              <button id="batchDisableProblems" class="danger-btn" type="button">禁用异常</button>
+              <button id="bulkImportBtn" class="primary-btn" type="button">批量导入</button>
+            </div>
           </div>
-          <div id="auditList" class="audit-list"><div class="empty">暂无审计记录。</div></div>
+          <div class="table-scroll key-table-scroll">
+            <table aria-label="密钥池">
+              <thead><tr>
+                <th class="col-check"><input id="selectAllKeys" type="checkbox" class="key-checkbox"></th>
+                <th>密钥 ID</th><th>启用</th><th>权重</th>
+                <th class="sortable" data-sort="requests">请求</th>
+                <th class="sortable" data-sort="success">成功</th>
+                <th class="sortable" data-sort="failures">失败</th>
+                <th class="sortable" data-sort="rateLimits">429</th>
+                <th class="sortable" data-sort="timeouts">超时</th>
+                <th>冷却</th><th>操作</th>
+              </tr></thead>
+              <tbody id="keysBody"><tr><td colspan="11" class="empty">输入管理员令牌后刷新。</td></tr></tbody>
+            </table>
+          </div>
+          <div class="pager">
+            <span id="keyPager">显示 0 个密钥</span>
+            <span class="pager-actions">
+              <select id="keyPageSize" class="select page-size-select"><option value="25">25</option><option value="50" selected>50</option><option value="100">100</option><option value="200">200</option></select>
+              <button id="prevKeyPage" class="mini-btn" type="button">上一页</button>
+              <strong id="keyPageLabel">第 1 页</strong>
+              <button id="nextKeyPage" class="mini-btn" type="button">下一页</button>
+              <span class="pager-jump">跳至 <input id="jumpKeyPage" type="number" min="1" class="jump-input"> 页</span>
+            </span>
+          </div>
         </section>
+      </div>
 
-        <section class="panel config-panel" data-view="config">
+      <div class="tab-panel" data-tab-panel="logs">
+        <section class="panel log-panel">
           <div class="panel-head">
-            <div class="panel-title"><h2>运行配置</h2><span>当前容器与代理安全边界</span></div>
+            <div class="panel-title"><h2>请求日志</h2><span id="logCount">已载入 0 条</span></div>
+            <div class="toolbar log-tools">
+              <input id="logSearch" class="search compact" placeholder="搜索日志">
+              <input id="logPathFilter" class="search compact" placeholder="路径">
+              <input id="logKeyFilter" class="search compact" placeholder="密钥">
+              <select id="logStatusFilter" class="select"><option value="">全部状态</option><option value="success">成功</option><option value="error">异常</option><option value="4xx">4xx</option><option value="5xx">5xx</option><option value="429">429</option></select>
+              <button id="applyLogFilters" class="ghost-btn" type="button">筛选</button>
+              <button id="exportLogs" class="ghost-btn" type="button">导出</button>
+              <button id="pruneLogs" class="danger-btn" type="button">清理</button>
+            </div>
           </div>
-          <div class="config-body">
-            <div class="config-item"><span>监听地址</span><strong id="configListen" class="mono">-</strong></div>
-            <div class="config-item"><span>上游服务</span><strong id="configUpstream" class="mono">-</strong></div>
-            <div class="config-item"><span>调度策略</span><strong id="configStrategy">-</strong><small id="configAllowedPaths">路径策略未载入</small></div>
-            <div class="config-item"><span>状态存储</span><strong id="configState">-</strong><small id="configAffinity">资源亲和未载入</small></div>
-            <div class="config-item"><span>认证边界</span><strong>客户端令牌与管理员令牌分离</strong></div>
-            <div class="config-item"><span>密钥安全</span><strong id="configRawKey">默认脱敏展示</strong><small>原始密钥复制受策略控制并写入审计</small></div>
-            <div class="config-item"><span>登录保护</span><strong id="configAdminHttps">-</strong><small id="configSessionTtl">会话策略未载入</small></div>
-            <div class="config-item"><span>日志保留</span><strong id="retentionDays">-</strong><small id="retentionSummary">等待观测数据</small></div>
-            <div class="config-item"><span>过期日志</span><strong id="retentionExpired">0</strong><small id="retentionWindow">保留窗口未载入</small></div>
+          <div class="table-scroll log-table-scroll">
+            <table aria-label="请求日志">
+              <thead><tr><th>时间</th><th>请求 ID</th><th>方法</th><th>路径</th><th>搜索内容</th><th>状态</th><th>延迟</th><th>尝试</th><th>密钥链路</th><th>令牌</th><th>错误</th></tr></thead>
+              <tbody id="logsBody"><tr><td colspan="11" class="empty">暂无请求日志。</td></tr></tbody>
+            </table>
           </div>
+          <div id="tracePanel" class="trace-panel"><div class="empty">选择请求 ID 查看完整链路。</div></div>
+          <div class="pager"><span id="logPager">显示 0 条日志</span><span>每页 10 条</span></div>
         </section>
-      </section>
+      </div>
+
+      <div class="tab-panel" data-tab-panel="audit">
+        <section class="management-grid">
+          <section class="panel audit-panel">
+            <div class="panel-head">
+              <div class="panel-title"><h2>管理员审计</h2><span>登录、重置、测试与日志治理</span></div>
+              <div class="toolbar"><button id="exportAudit" class="ghost-btn" type="button">导出审计</button></div>
+            </div>
+            <div id="auditList" class="audit-list"><div class="empty">暂无审计记录。</div></div>
+          </section>
+
+          <section class="panel config-panel">
+            <div class="panel-head">
+              <div class="panel-title"><h2>运行配置</h2><span>当前容器与代理安全边界</span></div>
+            </div>
+            <div class="config-body">
+              <div class="config-item"><span>监听地址</span><strong id="configListen" class="mono">-</strong></div>
+              <div class="config-item"><span>上游服务</span><strong id="configUpstream" class="mono">-</strong></div>
+              <div class="config-item"><span>调度策略</span><strong id="configStrategy">-</strong><small id="configAllowedPaths">路径策略未载入</small></div>
+              <div class="config-item"><span>状态存储</span><strong id="configState">-</strong><small id="configAffinity">资源亲和未载入</small></div>
+              <div class="config-item"><span>认证边界</span><strong>客户端令牌与管理员令牌分离</strong></div>
+              <div class="config-item"><span>密钥安全</span><strong id="configRawKey">默认脱敏展示</strong><small>原始密钥复制受策略控制并写入审计</small></div>
+              <div class="config-item"><span>登录保护</span><strong id="configAdminHttps">-</strong><small id="configSessionTtl">会话策略未载入</small></div>
+              <div class="config-item"><span>日志保留</span><strong id="retentionDays">-</strong><small id="retentionSummary">等待观测数据</small></div>
+              <div class="config-item"><span>过期日志</span><strong id="retentionExpired">0</strong><small id="retentionWindow">保留窗口未载入</small></div>
+            </div>
+          </section>
+        </section>
+      </div>
+
     </main>
 
-    <aside id="details" class="details key-details-panel details-sticky">
-      <div class="details-head"><h2>密钥详情</h2><span class="muted">控制台总览</span></div>
+    <aside id="details" class="details details-sticky">
+      <div class="details-head"><h2>密钥详情</h2><span class="muted">选中密钥后显示</span></div>
       <div id="detailsBody" class="details-body">
         <div class="empty">选择一个密钥查看用量、冷却和最后错误。</div>
       </div>
@@ -195,6 +235,16 @@
           <button id="confirmImport" class="primary-btn" type="button">开始导入</button>
         </div>
       </div>
+    </div>
+  </div>
+
+  <div id="batchBar" class="batch-bar" hidden>
+    <span id="batchCount">已选 0 个密钥</span>
+    <div class="batch-actions">
+      <button id="batchEnableSelected" class="ghost-btn" type="button">启用</button>
+      <button id="batchDisableSelected" class="ghost-btn" type="button">禁用</button>
+      <button id="batchResetSelected" class="ghost-btn" type="button">重置熔断</button>
+      <button id="batchTestSelected" class="primary-btn" type="button">测试</button>
     </div>
   </div>
 

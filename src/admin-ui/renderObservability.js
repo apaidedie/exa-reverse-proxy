@@ -56,5 +56,4 @@ export function renderObservability() {
   el('alertCount').textContent = fmt(alerts.length) + ' 条告警';
   el('alertList').innerHTML = alerts.length ? alerts.map((alert) => '<div class="alert-item ' + esc(alert.severity || 'warn') + '"><div class="alert-title"><span>' + esc(alert.title) + '</span><span class="badge ' + esc(alert.severity || 'warn') + '">' + (alert.severity === 'bad' ? '严重' : '关注') + '</span></div><div class="alert-message">' + esc(alert.message) + '</div></div>').join('') : '<div class="empty">暂无告警。</div>';
   renderRetention(data);
-  renderConfigSummary();
 }

@@ -1,4 +1,4 @@
-export const state = { keys: [], logs: [], audit: [], observability: null, config: null, trace: null, keyFailures: {}, selectedId: null, timer: null, events: null, eventRefreshPending: false, keyPage: 1, keyPageSize: 12, pageKeyIds: [], problemKeyIds: [], lastOperation: null, secretDisplay: localStorage.getItem('exaSecretDisplay') || 'plain' };
+export const state = { keys: [], logs: [], audit: [], observability: null, config: null, trace: null, keyFailures: {}, selectedId: null, timer: null, events: null, eventRefreshPending: false, keyPage: 1, keyPageSize: 50, pageKeyIds: [], problemKeyIds: [], lastOperation: null, secretDisplay: localStorage.getItem('exaSecretDisplay') || 'plain', activeTab: 'overview', keyFilter: 'All', keySort: { column: null, direction: 'asc' }, selectedKeyIds: [] };
 export const token = document.querySelector('#token');
 export const loginToken = document.querySelector('#loginToken');
 const savedToken = sessionStorage.getItem('exaProxyAdminToken') || localStorage.getItem('exaProxyAdminToken') || '';
@@ -102,4 +102,12 @@ export function internalKeyIdFromFilter(value) {
   if (!query) return '';
   const found = state.keys.find((key) => key.id.toLowerCase() === query || rawDisplayLabel(key).toLowerCase() === query || displayLabel(key).toLowerCase() === query);
   return found ? found.id : value;
+}
+
+export function debounce(fn, delay) {
+  let timer;
+  return function (...args) {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn.apply(this, args), delay);
+  };
 }

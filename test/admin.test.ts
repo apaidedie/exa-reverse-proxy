@@ -179,9 +179,9 @@ describe('admin api and ui', () => {
     expect(uiSource).toContain('table-scroll key-table-scroll');
     expect(uiSource).toContain('table-scroll log-table-scroll');
     expect(uiSource).toContain('management-grid');
-    expect(uiSource).toContain('grid-template-columns: minmax(900px, 1fr) 380px');
+    expect(uiSource).toContain('grid-template-columns: minmax(700px, 1fr) 380px');
     expect(uiSource).toContain('height: 100vh; min-width: 1280px');
-    expect(uiSource).toContain('grid-template-rows: 52px minmax(0, 1fr)');
+    expect(uiSource).toContain('grid-template-rows: 52px 40px minmax(0, 1fr)');
     expect(uiSource).toContain('grid-template-columns: 210px minmax(0, 1fr) auto');
     expect(uiSource).toContain('min-height: 0;');
     expect(uiSource).toContain('.keys-panel { min-height: 342px; }');
@@ -713,11 +713,11 @@ describe('admin api and ui', () => {
     expect(uiBundle).not.toContain('请输入邮箱');
     expect(uiBundle).not.toContain('邮箱');
     expect(uiBundle).toContain('服务状态');
-    expect(uiBundle).toContain('上游健康');
-    expect(uiBundle).toContain('冷却中密钥');
+    expect(uiBundle).toContain('概览');
+    expect(uiBundle).toContain('审计与配置');
     expect(uiBundle).toContain('自动刷新');
     expect(uiBundle).toContain('近 24 小时');
-    expect(uiBundle).toContain('全部状态');
+    expect(uiBundle).toContain('全部');
     expect(uiBundle).toContain('密钥详情');
     expect(uiBundle).toContain('密钥池');
     expect(uiBundle).toContain('请求日志');
@@ -737,7 +737,7 @@ describe('admin api and ui', () => {
     expect(uiBundle).toContain('导出</button>');
     expect(uiBundle).toContain('脱敏显示');
     expect(uiBundle).toContain('data-console-shell');
-    expect(uiBundle).toContain('key-details-panel');
+    expect(uiBundle).toContain('details-sticky');
     expect(uiBundle).toContain('/_proxy/keys');
     expect(uiBundle).toContain('/_proxy/logs');
     expect(uiBundle).toContain("localStorage.getItem('exaProxyAdminToken')");
@@ -747,7 +747,7 @@ describe('admin api and ui', () => {
     expect(uiBundle).toContain('log-chain');
     expect(uiBundle).not.toContain('data-nav-target=');
     expect(uiBundle).not.toContain('aria-label="主导航"');
-    expect(uiBundle).toContain('data-view="keys"');
+    expect(uiBundle).toContain('data-tab-panel="keys"');
     expect(uiBundle).not.toContain('switchView');
     expect(uiBundle).toContain('运行配置');
     expect(uiBundle).toContain('metric-head');
@@ -760,7 +760,7 @@ describe('admin api and ui', () => {
     expect(uiBundle).toContain('id="latencyMeter"');
     expect(uiBundle).toContain('id="failureMeter"');
     expect(uiBundle).toContain('updateMetricMeters');
-    expect(uiBundle).toContain('keyPageSize: 12');
+    expect(uiBundle).toContain('keyPageSize: 50');
     expect(uiBundle).toContain('id="prevKeyPage"');
     expect(uiBundle).toContain('id="nextKeyPage"');
     expect(uiBundle).toContain("data-action=\"test\"");

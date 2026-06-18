@@ -47,11 +47,11 @@ export function updateSummary() {
   const serviceClass = hasHealthyKey ? '' : totals.active ? 'warn' : 'bad';
   const upstreamClass = totals.failures > 0 ? (hasHealthyKey ? 'warn' : 'bad') : '';
   el('serviceDot').className = 'status-dot ' + serviceClass;
-  el('upstreamDot').className = 'status-dot ' + upstreamClass;
+  if (el('upstreamDot')) el('upstreamDot').className = 'status-dot ' + upstreamClass;
   el('serviceStatus').textContent = hasHealthyKey ? '运行中' : totals.active ? '降级' : '无可用';
-  el('upstreamHealth').textContent = totals.failures > 0 ? (hasHealthyKey ? '波动' : '异常') : '正常';
+  if (el('upstreamHealth')) el('upstreamHealth').textContent = totals.failures > 0 ? (hasHealthyKey ? '波动' : '异常') : '正常';
   el('activeKeys').textContent = String(totals.active);
-  el('cooldownKeys').textContent = String(totals.cooldown);
+  if (el('cooldownKeys')) el('cooldownKeys').textContent = String(totals.cooldown);
   el('totalRequests').textContent = fmt(totals.requests);
   el('errorRate').textContent = errorRate;
   el('errorRate').className = 'summary-value ' + (totals.failures ? 'bad' : 'good');
@@ -67,14 +67,48 @@ export function updateSummary() {
 
 export function renderKeys() {
   const query = el('keySearch').value.toLowerCase();
-  const filter = filterMap[el('statusFilter').value] || 'All';
+  const filter = state.keyFilter || 'All';
   el('toggleSecretDisplay').textContent = state.secretDisplay === 'plain' ? '脱敏显示' : '显示原文';
+
+  // Compute chip counts across all keys
+  let healthyCount = 0, cooldownCount = 0, disabledCount = 0, problemCount = 0;
   const rows = state.keys.filter((key) => {
     const status = statusOf(key);
     const problem = status === 'Cooldown' || status === 'Disabled' || Number(key.failureCount || 0) > 0 || Number(key.rateLimitCount || 0) > 0 || Number(key.timeoutCount || 0) > 0;
     key._problem = problem;
+    if (status === 'Healthy') healthyCount++;
+    else if (status === 'Cooldown') cooldownCount++;
+    else if (status === 'Disabled') disabledCount++;
+    if (problem) problemCount++;
     return (key.id.toLowerCase().includes(query) || rawDisplayLabel(key).toLowerCase().includes(query)) && (filter === 'All' || filter === status || (filter === 'Problem' && problem));
   });
+
+  // Update chip counts and active state
+  const chipCounts = { All: state.keys.length, Healthy: healthyCount, Cooldown: cooldownCount, Disabled: disabledCount, Problem: problemCount };
+  document.querySelectorAll('#keyFilterChips .chip').forEach((chip) => {
+    const value = chip.dataset.chip;
+    chip.classList.toggle('active', value === filter);
+    const countSpan = chip.querySelector('.chip-count');
+    if (countSpan) countSpan.textContent = String(chipCounts[value] || 0);
+  });
+
+  // Apply sorting
+  if (state.keySort.column) {
+    const col = state.keySort.column;
+    const dir = state.keySort.direction === 'desc' ? -1 : 1;
+    const sortMap = { requests: 'totalRequests', success: 'successCount', failures: 'failureCount', rateLimits: 'rateLimitCount', timeouts: 'timeoutCount' };
+    const field = sortMap[col] || col;
+    rows.sort((a, b) => (Number(a[field] || 0) - Number(b[field] || 0)) * dir);
+  }
+
+  // Update sort indicators on th
+  document.querySelectorAll('.key-table-scroll th.sortable').forEach((th) => {
+    th.classList.remove('sort-asc', 'sort-desc');
+    if (th.dataset.sort === state.keySort.column) {
+      th.classList.add(state.keySort.direction === 'desc' ? 'sort-desc' : 'sort-asc');
+    }
+  });
+
   state.problemKeyIds = rows.filter((key) => key._problem).map((key) => key.id);
   const totalPages = Math.max(1, Math.ceil(rows.length / state.keyPageSize));
   state.keyPage = Math.min(Math.max(1, state.keyPage), totalPages);
@@ -86,7 +120,7 @@ export function renderKeys() {
   el('prevKeyPage').disabled = state.keyPage <= 1;
   el('nextKeyPage').disabled = state.keyPage >= totalPages;
   if (!rows.length) {
-    el('keysBody').innerHTML = '<tr><td colspan="10" class="empty">没有匹配的密钥。</td></tr>';
+    el('keysBody').innerHTML = '<tr><td colspan="11" class="empty">没有匹配的密钥。</td></tr>';
     return;
   }
   el('keysBody').innerHTML = pageRows.map((key) => {
@@ -94,7 +128,9 @@ export function renderKeys() {
     const observedRequests = observedRequestsFor(key);
     const success = pct(key.successCount, observedRequests);
     const selected = key.id === state.selectedId ? ' class="selected"' : '';
+    const checked = state.selectedKeyIds.includes(key.id) ? ' checked' : '';
     return '<tr data-key-id="' + esc(key.id) + '"' + selected + '>' +
+      '<td class="col-check"><input type="checkbox" class="key-checkbox" data-key-check="' + esc(key.id) + '"' + checked + '></td>' +
       '<td class="mono">' + esc(displayLabel(key)) + '</td>' +
       '<td><button class="toggle ' + (key.enabled ? 'on' : '') + '" data-action="toggle" aria-label="切换密钥"></button></td>' +
       '<td>' + fmt(key.weight) + '</td>' +

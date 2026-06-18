@@ -1,8 +1,8 @@
 import { api, clearToken, currentSessionId, exportAudit, exportLogs, fetchConfigSummary, fetchKeyFailureSummary, fetchLogTrace, fetchLogs, fetchObservability, verifyAdminToken, verifyStoredSession } from './api.js';
-import { displayLabelById, el, fmt, labelOf, loginToken, ms, rawKeyDisplayAllowed, stamp, state, token } from './state.js';
+import { debounce, displayLabelById, el, fmt, labelOf, loginToken, ms, rawKeyDisplayAllowed, stamp, state, token } from './state.js';
 import { renderDetails, renderKeys, updateSummary } from './renderKeys.js';
 import { renderAudit, renderLogTrace, renderLogs } from './renderLogs.js';
-import { renderObservability } from './renderObservability.js';
+import { renderConfigSummary, renderObservability } from './renderObservability.js';
 
 function showToast(message) {
   const toast = el('toast');
@@ -10,6 +10,16 @@ function showToast(message) {
   toast.style.display = 'block';
   clearTimeout(showToast.timer);
   showToast.timer = setTimeout(() => { toast.style.display = 'none'; }, 3200);
+}
+
+function updateBatchBar() {
+  const bar = el('batchBar');
+  const count = state.selectedKeyIds.length;
+  if (bar) {
+    bar.hidden = count === 0;
+    const countEl = el('batchCount');
+    if (countEl) countEl.textContent = '已选 ' + fmt(count) + ' 个密钥';
+  }
 }
 
 function closeEventStream() {
@@ -54,6 +64,31 @@ async function loadLogTrace(requestId) {
   renderLogTrace();
 }
 
+function switchTab(tabId) {
+  state.activeTab = tabId;
+  document.querySelectorAll('.tab-btn').forEach((btn) => btn.classList.toggle('active', btn.dataset.tab === tabId));
+  document.querySelectorAll('.tab-panel').forEach((panel) => panel.classList.toggle('active', panel.dataset.tabPanel === tabId));
+  const shell = document.querySelector('[data-console-shell]');
+  if (shell) shell.classList.toggle('has-aside', tabId === 'keys');
+  renderActiveTab(tabId);
+}
+
+function renderActiveTab(tabId) {
+  if (tabId === 'overview') {
+    updateSummary();
+    renderObservability();
+  } else if (tabId === 'keys') {
+    renderKeys();
+    renderDetails();
+  } else if (tabId === 'logs') {
+    renderLogs();
+    renderLogTrace();
+  } else if (tabId === 'audit') {
+    renderAudit();
+    renderConfigSummary();
+  }
+}
+
 async function refresh() {
   const [keyData, logData, observabilityData, auditData, configData] = await Promise.all([
     api('/_proxy/keys'),
@@ -68,13 +103,9 @@ async function refresh() {
   state.audit = auditData.audit || [];
   state.config = configData || null;
   updateSummary();
-  renderKeys();
-  renderLogs();
-  renderObservability();
-  renderAudit();
-  renderLogTrace();
-  if (state.selectedId) await loadKeyFailureSummary(state.selectedId).catch(() => {});
-  renderDetails();
+  renderActiveTab(state.activeTab);
+  if (state.activeTab === 'keys' && state.selectedId) await loadKeyFailureSummary(state.selectedId).catch(() => {});
+  if (state.activeTab === 'keys') renderDetails();
 }
 
 async function batchKeyAction(action, ids) {
@@ -240,7 +271,7 @@ el('toggleLoginToken').addEventListener('click', () => {
   loginToken.type = visible ? 'password' : 'text';
   el('toggleLoginToken').textContent = visible ? '显示' : '隐藏';
 });
-el('keySearch').addEventListener('input', () => { state.keyPage = 1; renderKeys(); });
+el('keySearch').addEventListener('input', debounce(() => { state.keyPage = 1; renderKeys(); }, 250));
 el('logSearch').addEventListener('input', renderLogs);
 el('logPathFilter').addEventListener('input', () => fetchLogs().then((data) => { state.logs = data.logs || []; renderLogs(); }).catch((error) => showToast(error.message)));
 el('logKeyFilter').addEventListener('input', () => fetchLogs().then((data) => { state.logs = data.logs || []; renderLogs(); }).catch((error) => showToast(error.message)));
@@ -286,10 +317,11 @@ el('toggleSecretDisplay').addEventListener('click', () => {
   renderLogs();
   renderDetails();
 });
-el('statusFilter').addEventListener('change', () => { state.keyPage = 1; renderKeys(); });
+if (el('statusFilter')) el('statusFilter').addEventListener('change', () => { state.keyPage = 1; renderKeys(); });
 el('prevKeyPage').addEventListener('click', () => { state.keyPage -= 1; renderKeys(); });
 el('nextKeyPage').addEventListener('click', () => { state.keyPage += 1; renderKeys(); });
 el('keysBody').addEventListener('click', (event) => {
+  if (event.target.closest('.key-checkbox')) return;
   const row = event.target.closest('tr[data-key-id]');
   if (!row) return;
   const button = event.target.closest('button[data-action]');
@@ -308,6 +340,77 @@ el('detailsBody').addEventListener('click', (event) => {
 });
 el('autoRefresh').addEventListener('change', resetTimer);
 el('refreshInterval').addEventListener('change', resetTimer);
+
+// Tab navigation
+document.querySelector('.tab-bar').addEventListener('click', (event) => {
+  const btn = event.target.closest('.tab-btn');
+  if (btn) switchTab(btn.dataset.tab);
+});
+
+// Select all keys checkbox (in thead)
+if (el('selectAllKeys')) el('selectAllKeys').addEventListener('change', (event) => {
+  const checked = event.target.checked;
+  state.selectedKeyIds = checked ? state.pageKeyIds.slice() : [];
+  renderKeys();
+  updateBatchBar();
+});
+
+// Delegated individual checkbox clicks on keysBody
+el('keysBody').addEventListener('change', (event) => {
+  const cb = event.target.closest('.key-checkbox');
+  if (!cb) return;
+  const id = cb.dataset.keyCheck;
+  if (cb.checked) {
+    if (!state.selectedKeyIds.includes(id)) state.selectedKeyIds.push(id);
+  } else {
+    state.selectedKeyIds = state.selectedKeyIds.filter((k) => k !== id);
+  }
+  updateBatchBar();
+});
+
+// Page size selector
+if (el('keyPageSize')) el('keyPageSize').addEventListener('change', (event) => {
+  state.keyPageSize = Number(event.target.value);
+  state.keyPage = 1;
+  renderKeys();
+});
+
+// Jump to page
+if (el('jumpKeyPage')) el('jumpKeyPage').addEventListener('keydown', (event) => {
+  if (event.key !== 'Enter') return;
+  const page = Number(event.target.value);
+  const maxPage = Math.max(1, Math.ceil(state.keys.length / state.keyPageSize));
+  if (page >= 1 && page <= maxPage) { state.keyPage = page; renderKeys(); }
+  event.target.value = '';
+});
+
+// Batch action bar buttons
+if (el('batchEnableSelected')) el('batchEnableSelected').addEventListener('click', () => batchKeyAction('enable', state.selectedKeyIds).catch((e) => showToast(e.message)));
+if (el('batchDisableSelected')) el('batchDisableSelected').addEventListener('click', () => batchKeyAction('disable', state.selectedKeyIds).catch((e) => showToast(e.message)));
+if (el('batchResetSelected')) el('batchResetSelected').addEventListener('click', () => batchKeyAction('reset', state.selectedKeyIds).catch((e) => showToast(e.message)));
+if (el('batchTestSelected')) el('batchTestSelected').addEventListener('click', () => batchKeyAction('test', state.selectedKeyIds).catch((e) => showToast(e.message)));
+
+// Filter chips
+if (el('keyFilterChips')) el('keyFilterChips').addEventListener('click', (event) => {
+  const chip = event.target.closest('.chip');
+  if (!chip) return;
+  state.keyFilter = chip.dataset.chip || 'All';
+  state.keyPage = 1;
+  renderKeys();
+});
+
+// Sortable column headers
+document.querySelector('.key-table-scroll thead').addEventListener('click', (event) => {
+  const th = event.target.closest('th.sortable');
+  if (!th) return;
+  const column = th.dataset.sort;
+  if (state.keySort.column === column) {
+    state.keySort.direction = state.keySort.direction === 'asc' ? 'desc' : 'asc';
+  } else {
+    state.keySort = { column, direction: 'asc' };
+  }
+  renderKeys();
+});
 
 showLogin();
 if (currentSessionId()) {
