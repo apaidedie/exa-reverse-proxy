@@ -69,7 +69,11 @@ async function loadLogTrace(requestId) {
 
 function switchTab(tabId) {
   state.activeTab = tabId;
-  document.querySelectorAll('.nav-item[data-tab]').forEach((btn) => btn.classList.toggle('active', btn.dataset.tab === tabId));
+  document.querySelectorAll('.nav-item[data-tab]').forEach((btn) => {
+    const isActive = btn.dataset.tab === tabId;
+    btn.classList.toggle('active', isActive);
+    btn.setAttribute('aria-selected', String(isActive));
+  });
   document.querySelectorAll('.tab-panel').forEach((panel) => panel.classList.toggle('active', panel.dataset.tabPanel === tabId));
   const shell = document.querySelector('[data-console-shell]');
   if (shell) shell.classList.toggle('has-aside', tabId === 'keys');

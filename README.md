@@ -3,7 +3,7 @@
 [![CI](https://github.com/apaidedie/exa-reverse-proxy/actions/workflows/ci.yml/badge.svg)](https://github.com/apaidedie/exa-reverse-proxy/actions/workflows/ci.yml)
 [![Docker Pulls](https://img.shields.io/docker/pulls/al1ya/exa-reverse-proxy?logo=docker)](https://hub.docker.com/r/al1ya/exa-reverse-proxy)
 [![Docker Image Size](https://img.shields.io/docker/image-size/al1ya/exa-reverse-proxy/latest?logo=docker&label=image%20size)](https://hub.docker.com/r/al1ya/exa-reverse-proxy/tags)
-[![Version](https://img.shields.io/badge/version-0.1.1-blue)](https://github.com/apaidedie/exa-reverse-proxy/releases)
+[![Version](https://img.shields.io/badge/version-0.4.9-blue)](https://github.com/apaidedie/exa-reverse-proxy/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 Exa API 反向代理，将多把上游 Key 池化为一个统一端点，支持智能调度、自动故障转移和中文运维控制台。
