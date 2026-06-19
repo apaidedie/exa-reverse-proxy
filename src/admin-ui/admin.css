@@ -163,13 +163,13 @@ button { cursor: pointer; }
 /* ═══════════════════════════════════════════════
    Main content area
    ═══════════════════════════════════════════════ */
-.main { grid-column: 1; grid-row: 3; min-height: 0; padding: 10px 14px 12px; display: grid; grid-template-rows: auto auto minmax(0, 1fr); gap: 10px; overflow: hidden; }
+.main { grid-column: 1; grid-row: 3; min-height: 0; height: calc(100vh - 92px); padding: 10px 14px 12px; display: flex; flex-direction: column; gap: 10px; overflow: hidden; box-sizing: border-box; }
 
 /* ═══════════════════════════════════════════════
    Tab panels
    ═══════════════════════════════════════════════ */
 .tab-panel { display: none; }
-.tab-panel.active { display: flex; flex-direction: column; grid-row: 1 / -1; min-height: 0; gap: 10px; }
+.tab-panel.active { display: flex; flex-direction: column; flex: 1; min-height: 0; gap: 10px; }
 .tab-panel > .panel { min-height: 0; display: flex; flex-direction: column; flex: 1; }
 [data-tab-panel="keys"] > *, [data-tab-panel="logs"] > *, [data-tab-panel="audit"] > * { flex: 1; min-height: 0; }
 
