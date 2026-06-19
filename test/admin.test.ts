@@ -728,7 +728,7 @@ describe('admin api and ui', () => {
     expect(uiBundle).toContain('displayLabel');
     expect(uiBundle).toContain('测试密钥');
     expect(uiBundle).toContain('操作反馈');
-    expect(uiBundle).toContain('重置熔断');
+    expect(uiBundle).toContain('重置冷却');
     expect(uiBundle).toContain('禁用密钥');
     expect(uiBundle).toContain('上游超时');
     expect(uiBundle).toContain('连接异常');
