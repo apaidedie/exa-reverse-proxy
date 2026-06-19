@@ -124,6 +124,8 @@ describe('admin api and ui', () => {
     expect(root.body).toContain('/_proxy/ui/admin.css?v=' + cssHash);
     expect(root.body).toContain('/_proxy/ui/admin.js?v=' + manifestJson.assets['admin.js'].hash.slice(0, 12));
     expect(root.body).toContain('id="assetVersion"');
+    expect(root.body).toContain(`版本 ${manifestJson.version}`);
+    expect(root.body).not.toContain('版本 -');
     expect(manifest.statusCode).toBe(200);
     expect(manifestJson).toMatchObject({ version: expect.any(String), assets: { 'admin.css': { sha256: expect.any(String), hash: expect.any(String) } } });
     expect(css.headers['cache-control']).toContain('max-age=31536000');

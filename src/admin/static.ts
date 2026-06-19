@@ -58,7 +58,7 @@ async function readAdminUi(): Promise<string> {
   return html
     .replace('/_proxy/ui/admin.css"', `/_proxy/ui/admin.css?v=${manifest.assets['admin.css'].hash}"`)
     .replace('/_proxy/ui/admin.js"', `/_proxy/ui/admin.js?v=${manifest.assets['admin.js'].hash}"`)
-    .replace('id="assetVersion">版本 -', `id="assetVersion">版本 ${manifest.version}`);
+    .replace('id="assetVersion" class="brand-version">版本 -', `id="assetVersion" class="brand-version">版本 ${manifest.version}`);
 }
 
 async function readAsset(name: string): Promise<{ body: string; type: string } | null> {
