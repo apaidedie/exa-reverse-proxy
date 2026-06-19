@@ -90,7 +90,8 @@ test.beforeAll(async () => {
     trendWindowHours: 24,
     trustProxy: false,
     upstreamPoolConnections: 128,
-    affinityRetentionDays: 7
+    affinityRetentionDays: 7,
+    proxyRateLimitPerMinute: 0
   };
 
   app = await buildApp({ config });

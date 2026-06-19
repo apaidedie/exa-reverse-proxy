@@ -56,6 +56,7 @@ describe('app', () => {
         trustProxy: false,
         upstreamPoolConnections: 128,
         affinityRetentionDays: 7,
+        proxyRateLimitPerMinute: 0,
       }
     });
 

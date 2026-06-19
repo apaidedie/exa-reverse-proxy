@@ -1,4 +1,5 @@
 import Fastify, { type FastifyInstance } from 'fastify';
+import rateLimit from '@fastify/rate-limit';
 import { registerAdminRoutes } from './admin.js';
 import { resetMetricsCache } from './admin/observability.js';
 import { createStateStore, type StateStore } from './state.js';
@@ -56,6 +57,7 @@ export type ProxyConfig = {
   trustProxy: boolean | string | number;
   upstreamPoolConnections: number;
   affinityRetentionDays: number;
+  proxyRateLimitPerMinute: number;
 };
 
 export type AppDeps = {
@@ -144,6 +146,13 @@ export async function buildApp(options: { config: ProxyConfig }): Promise<Fastif
   // Unauthenticated liveness probe for load balancers and orchestrators
   app.get('/_proxy/live', async () => ({ ok: true, keys: configKeys.length }));
 
+  // Global security headers on all responses
+  app.addHook('onSend', async (_request, reply) => {
+    reply.header('x-frame-options', 'DENY');
+    reply.header('x-content-type-options', 'nosniff');
+    reply.header('strict-transport-security', 'max-age=31536000; includeSubDomains');
+  });
+
   app.addHook('onClose', async () => {
     if (logRetentionTimer) clearInterval(logRetentionTimer);
     scheduler.dispose();
@@ -153,11 +162,26 @@ export async function buildApp(options: { config: ProxyConfig }): Promise<Fastif
 
   await registerAdminRoutes(app, deps);
 
-  app.route({
-    method: ['DELETE', 'GET', 'HEAD', 'OPTIONS', 'PATCH', 'POST', 'PUT'],
-    url: '/*',
-    handler: async (request, reply) => proxyHandler(request, reply, deps)
-  });
+  // Proxy catch-all route with optional rate limiting
+  if (options.config.proxyRateLimitPerMinute > 0) {
+    await app.register(async function proxyContext(proxyApp) {
+      await proxyApp.register(rateLimit, {
+        max: options.config.proxyRateLimitPerMinute,
+        timeWindow: '1 minute'
+      });
+      proxyApp.route({
+        method: ['DELETE', 'GET', 'HEAD', 'OPTIONS', 'PATCH', 'POST', 'PUT'],
+        url: '/*',
+        handler: async (request, reply) => proxyHandler(request, reply, deps)
+      });
+    });
+  } else {
+    app.route({
+      method: ['DELETE', 'GET', 'HEAD', 'OPTIONS', 'PATCH', 'POST', 'PUT'],
+      url: '/*',
+      handler: async (request, reply) => proxyHandler(request, reply, deps)
+    });
+  }
 
   return app;
 }

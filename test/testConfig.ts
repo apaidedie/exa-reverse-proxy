@@ -46,6 +46,7 @@ export function testConfig(overrides: Partial<ProxyConfig> = {}): ProxyConfig {
     trustProxy: false,
     upstreamPoolConnections: 128,
     affinityRetentionDays: 7,
+    proxyRateLimitPerMinute: 0,
     ...overrides
   };
 }

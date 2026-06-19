@@ -83,7 +83,8 @@ const config: ProxyConfig = {
   trendWindowHours: 24,
   trustProxy: false,
   upstreamPoolConnections: 128,
-  affinityRetentionDays: 7
+  affinityRetentionDays: 7,
+  proxyRateLimitPerMinute: 0
 };
 
 const app = await buildApp({ config });

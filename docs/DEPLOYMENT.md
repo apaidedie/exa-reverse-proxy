@@ -4,7 +4,7 @@
 
 ```text
 al1ya/exa-reverse-proxy:latest
-al1ya/exa-reverse-proxy:0.1.1
+al1ya/exa-reverse-proxy:0.5.0
 ```
 
 ## VPS 部署
@@ -76,8 +76,8 @@ scripts\publish-docker-hub.bat
 
 ```bash
 docker compose build
-docker tag exa-reverse-proxy:local <用户名>/exa-reverse-proxy:0.1.2
-docker push <用户名>/exa-reverse-proxy:0.1.2
+docker tag exa-reverse-proxy:local <用户名>/exa-reverse-proxy:0.5.0
+docker push <用户名>/exa-reverse-proxy:0.5.0
 ```
 
 ---
@@ -123,6 +123,36 @@ server {
     }
 }
 ```
+
+## Prometheus 监控
+
+Exa Proxy 在 `/_proxy/metrics` 端点提供 Prometheus 格式的指标输出，需要管理员令牌认证。
+
+### Prometheus 抓取配置
+
+在 `prometheus.yml` 中添加以下 scrape job：
+
+```yaml
+scrape_configs:
+  - job_name: 'exa-proxy'
+    scrape_interval: 30s
+    metrics_path: /_proxy/metrics
+    bearer_token: '<管理员令牌>'
+    static_configs:
+      - targets: ['127.0.0.1:8787']
+        labels:
+          instance: 'exa-proxy'
+```
+
+### Grafana 仪表板
+
+项目提供预置 Grafana 仪表板 JSON 文件：[`docs/grafana-dashboard.json`](./grafana-dashboard.json)
+
+导入步骤：Grafana → Dashboards → Import → Upload JSON file → 选择 Prometheus 数据源 → Import。
+
+仪表板包含请求总量、延迟趋势、密钥健康状态、连接池利用率等 13 个面板，支持按密钥 ID 筛选。
+
+---
 
 ## 常见问题
 
